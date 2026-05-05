@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Zach.Wright\\Desktop\\Projects\\chairman mao\\.claude\\push-hook.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}
