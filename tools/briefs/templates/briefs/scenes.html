@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Scene Catalog{% endblock %}
+{% block page_title %}Scene Catalog{% endblock %}
+{% block page_subtitle %}{{ total_scenes }} scenes available{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary" onclick="document.getElementById('createModal').style.display='flex'">+ Add Scene</button>
+<a href="{{ url_for('briefs.index') }}" class="btn btn-secondary">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+    <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0; flex:1; min-width:180px;">
+            <label class="form-label">Search</label>
+            <input type="text" name="search" class="form-control" value="{{ search }}" placeholder="Name or tag…">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">Room Type</label>
+            <select name="room_type" class="form-control">
+                <option value="">All</option>
+                {% for rt in room_types %}<option value="{{ rt }}" {% if room_filter == rt %}selected{% endif %}>{{ rt }}</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        {% if search or room_filter %}<a href="{{ url_for('briefs.scene_catalog') }}" class="btn btn-secondary">Clear</a>{% endif %}
+    </form>
+</div>
+
+{% if scenes %}
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px; margin-bottom:24px;">
+{% for s in scenes %}
+<div class="card" style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+            <div style="font-weight:600; font-size:14px;">{{ s.name }}</div>
+            {% if s.room_type %}<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">{{ s.room_type }}</div>{% endif %}
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="viewScene({{ s.id }})">Info</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteScene({{ s.id }}, '{{ s.name|replace("'","\\'")|e }}')">Del</button>
+        </div>
+    </div>
+    {% if s.description %}<p style="font-size:12px; color:var(--text-muted); line-height:1.4;">{{ s.description }}</p>{% endif %}
+    {% if s.tags %}
+    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+        {% for tag in s.tags.split(',') %}
+        <span style="font-size:11px; background:var(--surface-2); padding:2px 8px; border-radius:10px; color:var(--text-muted);">{{ tag.strip() }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div style="font-size:11px; color:var(--text-muted); margin-top:auto; padding-top:8px; border-top:1px solid var(--border); display:flex; gap:12px;">
+        <span>{{ s.file_count }} file{{ 's' if s.file_count != 1 else '' }}</span>
+        <span>{{ s.updated_at[:10] if s.updated_at else '' }}</span>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{% if total_pages > 1 %}
+<div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+    {% if page > 1 %}<a href="?page={{ page-1 }}&search={{ search }}&room_type={{ room_filter }}" class="btn btn-secondary btn-sm">← Prev</a>{% endif %}
+    <span style="padding:5px 12px; font-size:13px; color:var(--text-muted);">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}<a href="?page={{ page+1 }}&search={{ search }}&room_type={{ room_filter }}" class="btn btn-secondary btn-sm">Next →</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="text-align:center; padding:48px;">
+    <p style="color:var(--text-muted);">No scenes found. Add your first scene.</p>
+</div>
+{% endif %}
+
+<!-- Create Modal -->
+<div id="createModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:540px; max-width:95vw; max-height:90vh; overflow-y:auto;">
+        <div class="card-header"><span class="card-title">Add New Scene</span></div>
+        <form id="createForm">
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g. Modern White Bathroom">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Brief description of the scene…"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Room Type</label>
+                <select name="room_type" class="form-control">
+                    <option value="">— Select —</option>
+                    {% for rt in room_types %}<option value="{{ rt }}">{{ rt }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tags <span style="font-weight:400; color:var(--text-muted);">(comma separated)</span></label>
+                <input type="text" name="tags" class="form-control" placeholder="modern, minimalist, white">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Preview Image</label>
+                <input type="file" name="preview" class="form-control" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Scene Files <span style="font-weight:400; color:var(--text-muted);">(hold Ctrl/Cmd for multiple)</span></label>
+                <input type="file" name="scene_files" class="form-control" multiple>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('createModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Scene</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Info Modal -->
+<div id="infoModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:480px; max-width:95vw;">
+        <div class="card-header">
+            <span class="card-title" id="infoTitle">Scene Details</span>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('infoModal').style.display='none'">✕</button>
+        </div>
+        <div id="infoContent" style="font-size:13px;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('createForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const resp = await fetch('/briefs/api/scenes', { method: 'POST', body: fd });
+    const d = await resp.json();
+    if (d.success) location.reload();
+    else alert(d.error || 'Failed to create scene');
+});
+
+async function viewScene(id) {
+    const resp = await fetch(`/briefs/api/scenes/${id}/detail`);
+    const d = await resp.json();
+    document.getElementById('infoTitle').textContent = d.name;
+    document.getElementById('infoContent').innerHTML = `
+        <div style="display:grid; gap:8px; margin-bottom:16px;">
+            ${d.description ? `<div><span style="color:var(--text-muted);">Description</span><br>${d.description}</div>` : ''}
+            ${d.room_type ? `<div><span style="color:var(--text-muted);">Room Type</span><br>${d.room_type}</div>` : ''}
+            ${d.tags ? `<div><span style="color:var(--text-muted);">Tags</span><br>${d.tags}</div>` : ''}
+            <div><span style="color:var(--text-muted);">Files</span><br>${d.files.length} file(s)</div>
+        </div>
+        ${d.files.length ? '<div style="border-top:1px solid var(--border); padding-top:12px;">' +
+            d.files.map(f => `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04);">
+                <span style="font-size:12px;">${f.filename}</span>
+                <a href="/briefs/api/scenes/${id}/download/${f.id}" class="btn btn-secondary btn-sm">Download</a>
+            </div>`).join('') + '</div>' : ''}
+    `;
+    document.getElementById('infoModal').style.display = 'flex';
+}
+
+async function deleteScene(id, name) {
+    if (!confirm(`Delete scene "${name}"? This will also remove S3 files.`)) return;
+    const resp = await fetch(`/briefs/api/scenes/${id}`, { method: 'DELETE' });
+    const d = await resp.json();
+    if (d.success) location.reload();
+    else alert(d.error || 'Failed');
+}
+</script>
+{% endblock %}

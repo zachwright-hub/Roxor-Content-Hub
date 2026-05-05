@@ -1,0 +1,445 @@
+{% extends 'base.html' %}
+{% block title %}Review Uploads{% endblock %}
+{% block page_title %}Review Uploads{% endblock %}
+{% block page_subtitle %}Review and approve designer image submissions{% endblock %}
+
+{% block topbar_actions %}
+{% if uploads and status_filter == 'pending' %}
+<button class="btn btn-sm btn-primary" onclick="startSlideshow()">Review Slideshow ({{ uploads|length }})</button>
+{% endif %}
+{% if uploads %}
+<button class="btn btn-sm btn-primary" onclick="bulkAction('approve')" id="bulkApproveBtn" disabled>Approve Selected</button>
+<button class="btn btn-sm btn-danger" onclick="bulkAction('reject')" id="bulkRejectBtn" disabled>Reject Selected</button>
+{% endif %}
+<a href="{{ url_for('briefs.index') }}" class="btn btn-sm btn-secondary">← Back</a>
+{% endblock %}
+
+{% block head %}
+<style>
+    .btn-danger { background:#e53935; color:#fff; border:none; }
+    .btn-danger:hover { background:#c62828; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Status tabs -->
+<div style="display:flex; gap:0; margin-bottom:20px; border-bottom:1px solid var(--border);">
+    {% for s, label in [('pending','Pending'), ('approved','Approved'), ('rejected','Rejected')] %}
+    <a href="{{ url_for('briefs.uploads_review') }}?status={{ s }}"
+       style="padding:10px 20px; font-size:13px; font-weight:600; border-bottom:2px solid {% if status_filter == s %}var(--gold){% else %}transparent{% endif %}; color:{% if status_filter == s %}var(--gold){% else %}var(--text-muted){% endif %}; transition:all .15s; text-decoration:none;">
+        {{ label }} <span style="background:var(--surface-2); padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">{{ counts[s] }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+{% if uploads %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">{{ status_filter.title() }} ({{ uploads|length }})</span>
+        {% if status_filter == 'pending' %}
+        <label style="font-size:13px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="selectAll" onchange="toggleAll(this.checked)" style="accent-color:var(--gold);">
+            Select All
+        </label>
+        {% endif %}
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                {% if status_filter == 'pending' %}<th style="width:40px;"></th>{% endif %}
+                <th>Preview</th>
+                <th>Cutout</th>
+                <th>File</th><th>Designer</th><th>Brief</th><th>SKU</th><th>Type</th><th>Uploaded</th>
+                {% if status_filter == 'pending' %}<th>Actions</th>{% endif %}
+                {% if status_filter != 'pending' %}<th>Reviewed</th>{% endif %}
+            </tr></thead>
+            <tbody>
+            {% for u in uploads %}
+            <tr id="row-{{ u.id }}">
+                {% if status_filter == 'pending' %}
+                <td><input type="checkbox" class="rowCheck" value="{{ u.id }}" onchange="updateBulkButtons()" style="accent-color:var(--gold);"></td>
+                {% endif %}
+                <td>
+                    <div style="width:72px; height:72px; border-radius:4px; overflow:hidden; background:var(--surface-2); cursor:pointer;" onclick="previewImage({{ u.id }})">
+                        <img src="{{ url_for('briefs.api_upload_preview', upload_id=u.id) }}" style="width:100%; height:100%; object-fit:cover;" loading="lazy" alt="">
+                    </div>
+                </td>
+                <td>
+                    {% set sku_val = u.confirmed_sku or u.detected_sku %}
+                    {% if sku_val %}
+                    <div style="width:72px; height:72px; border-radius:4px; overflow:hidden; background:var(--surface-2); cursor:pointer;" onclick="previewCutout('{{ sku_val }}')">
+                        <img src="{{ url_for('briefs.api_cutout_preview', sku=sku_val) }}" style="width:100%; height:100%; object-fit:contain;" loading="lazy" alt="" onerror="this.parentElement.innerHTML='<span style=\'color:var(--text-muted);font-size:10px;display:flex;align-items:center;justify-content:center;height:100%;padding:4px;\'>No cutout</span>'">
+                    </div>
+                    {% else %}
+                    <div style="width:72px; height:72px; border-radius:4px; background:var(--surface-2); display:flex; align-items:center; justify-content:center;">
+                        <span style="color:var(--text-muted); font-size:10px;">No SKU</span>
+                    </div>
+                    {% endif %}
+                </td>
+                <td style="font-size:12px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ u.original_filename }}">{{ u.original_filename }}</td>
+                <td style="font-size:12px;">{{ u.uploader_name or '—' }}</td>
+                <td style="font-size:12px; color:var(--text-muted);">{{ u.brief_name or '—' }}</td>
+                <td>
+                    {% if status_filter == 'pending' %}
+                    <input type="text" class="form-control sku-input" style="width:120px; padding:3px 8px; font-size:12px;" value="{{ u.detected_sku or '' }}" data-id="{{ u.id }}" placeholder="SKU">
+                    {% else %}
+                    {{ u.confirmed_sku or u.detected_sku or '—' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if status_filter == 'pending' %}
+                    <select class="form-control type-select" style="width:90px; padding:3px 6px; font-size:12px;" data-id="{{ u.id }}">
+                        <option value="">—</option>
+                        {% for t in ['ls1','ls2','ls3','sp1'] %}<option value="{{ t }}" {% if u.image_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                    </select>
+                    {% else %}
+                    {{ u.image_type or '—' }}
+                    {% endif %}
+                </td>
+                <td style="font-size:11px; color:var(--text-muted);">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+                {% if status_filter == 'pending' %}
+                <td>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-primary btn-sm" onclick="approveOne({{ u.id }})">✓</button>
+                        <button class="btn btn-sm" style="background:#e53935;color:#fff;border:none;" onclick="rejectOne({{ u.id }})">✗</button>
+                        <button class="btn btn-secondary btn-sm" onclick="deleteOne({{ u.id }})">Del</button>
+                    </div>
+                </td>
+                {% endif %}
+                {% if status_filter != 'pending' %}
+                <td style="font-size:11px; color:var(--text-muted);">{{ u.reviewed_at[:10] if u.reviewed_at else '—' }}
+                    {% if u.review_comment %}<br><span style="color:#e53935; font-style:italic;">{{ u.review_comment[:60] }}</span>{% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center; padding:48px;">
+    <p style="color:var(--text-muted);">No {{ status_filter }} uploads.</p>
+</div>
+{% endif %}
+
+<!-- Reject reason modal -->
+<div id="rejectModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:440px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Reason for Rejection</span></div>
+        <div class="form-group">
+            <textarea id="rejectReason" class="form-control" rows="3" placeholder="Explain what needs to be fixed…"></textarea>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('rejectModal').style.display='none'">Cancel</button>
+            <button class="btn" style="background:#e53935;color:#fff;" onclick="submitReject()">Reject</button>
+        </div>
+    </div>
+</div>
+
+<!-- Single image preview modal -->
+<div id="previewModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:1000; align-items:center; justify-content:center; cursor:pointer;" onclick="this.style.display='none'">
+    <img id="previewImg" style="max-width:90%; max-height:90%; border-radius:8px;" alt="Preview">
+</div>
+
+<!-- Slideshow modal -->
+<div id="slideshowModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:2000; flex-direction:column;">
+    <!-- Header -->
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:rgba(2,5,79,0.9); border-bottom:1px solid var(--border);">
+        <div>
+            <span id="ss-counter" style="color:var(--text-muted); font-size:13px;"></span>
+            <span id="ss-filename" style="color:var(--text); font-weight:500; margin-left:16px; font-size:13px;"></span>
+            <span id="ss-designer" style="color:var(--text-muted); margin-left:16px; font-size:12px;"></span>
+        </div>
+        <button onclick="closeSlideshow()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:24px; line-height:1; padding:4px 8px;">&times;</button>
+    </div>
+    <!-- Image area -->
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; padding:16px;">
+        <button id="ss-prev" onclick="slideshowNav(-1)" style="position:absolute; left:16px; top:50%; transform:translateY(-50%); background:rgba(2,5,79,0.8); border:1px solid var(--border); color:var(--text); width:48px; height:48px; border-radius:50%; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div style="display:flex; align-items:center; gap:32px; max-width:90%; max-height:100%;">
+            <!-- Cutout reference -->
+            <div id="ss-cutout-wrap" style="flex:0 0 auto; text-align:center; max-width:240px;">
+                <div style="color:var(--text-muted); font-size:10px; font-weight:700; letter-spacing:.05em; margin-bottom:6px;">CUTOUT</div>
+                <img id="ss-cutout" style="max-width:240px; max-height:60vh; border-radius:4px; object-fit:contain; background:rgba(255,255,255,0.04); padding:8px;" alt="" onerror="this.parentElement.style.display='none'">
+            </div>
+            <!-- Upload -->
+            <div style="flex:1; text-align:center; min-width:0;">
+                <div style="color:var(--text-muted); font-size:10px; font-weight:700; letter-spacing:.05em; margin-bottom:6px;">UPLOAD</div>
+                <img id="ss-image" style="max-width:100%; max-height:70vh; border-radius:4px; object-fit:contain; display:none;" alt="">
+                <div id="ss-loading" style="color:var(--text-muted); font-size:13px;">Loading…</div>
+            </div>
+        </div>
+        <button id="ss-next" onclick="slideshowNav(1)" style="position:absolute; right:16px; top:50%; transform:translateY(-50%); background:rgba(2,5,79,0.8); border:1px solid var(--border); color:var(--text); width:48px; height:48px; border-radius:50%; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+    </div>
+    <!-- Action bar -->
+    <div style="display:flex; justify-content:center; align-items:center; gap:16px; padding:12px 20px; background:rgba(2,5,79,0.9); border-top:1px solid var(--border); flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <label style="color:var(--text-muted); font-size:12px;">SKU:</label>
+            <input type="text" id="ss-sku" style="width:140px; padding:5px 8px; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text);" placeholder="SKU">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <label style="color:var(--text-muted); font-size:12px;">Type:</label>
+            <select id="ss-type" style="padding:5px 8px; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text);">
+                <option value="">Select</option>
+                <option value="ls1">ls1</option>
+                <option value="ls2">ls2</option>
+                <option value="ls3">ls3</option>
+                <option value="sp1">sp1</option>
+            </select>
+        </div>
+        <button id="ss-approve-btn" class="btn btn-sm btn-primary" onclick="slideshowApprove()">Approve</button>
+        <button id="ss-reject-btn" class="btn btn-sm" style="background:#e53935;color:#fff;border:none;padding:5px 14px;font-size:12px;border-radius:4px;cursor:pointer;" onclick="slideshowReject()">Reject</button>
+        <div id="ss-status" style="font-size:12px; min-width:120px;"></div>
+    </div>
+    <!-- Reject panel -->
+    <div id="ss-reject-panel" style="display:none; padding:12px 20px; background:rgba(2,5,79,0.95); border-top:1px solid var(--border);">
+        <div style="display:flex; gap:10px; align-items:flex-end; max-width:700px; margin:0 auto;">
+            <div style="flex:1;">
+                <label style="color:var(--text-muted); font-size:12px; display:block; margin-bottom:4px;">Rejection feedback:</label>
+                <input type="text" id="ss-reject-comment" placeholder="What needs fixing…" style="width:100%; padding:6px 10px; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:13px;">
+            </div>
+            <button class="btn btn-sm" style="background:#e53935;color:#fff;border:none;padding:5px 14px;font-size:12px;border-radius:4px;cursor:pointer;" onclick="slideshowConfirmReject()">Send Back</button>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('ss-reject-panel').style.display='none'">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var uploadData = [
+    {% if status_filter == 'pending' %}
+    {% for u in uploads %}
+    {id: {{ u.id }}, filename: {{ u.original_filename | tojson }}, designer: {{ (u.uploader_name or 'Unknown') | tojson }}, sku: {{ (u.detected_sku or '') | tojson }}, imageType: {{ (u.image_type or '') | tojson }}},
+    {% endfor %}
+    {% endif %}
+];
+var ssIndex = 0;
+var pendingRejectId = null;
+var pendingRejectIds = null;
+
+function getSku(id)  { return (document.querySelector(`.sku-input[data-id="${id}"]`) || {}).value || ''; }
+function getType(id) { return (document.querySelector(`.type-select[data-id="${id}"]`) || {}).value || ''; }
+
+// ── Table actions ────────────────────────────────────────────────────────────
+
+async function approveOne(id) {
+    const sku = getSku(id), image_type = getType(id);
+    if (!sku)        { alert('Please enter a SKU'); return; }
+    if (!image_type) { alert('Please select an image type'); return; }
+    const resp = await fetch(`/briefs/api/uploads/${id}/approve`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku, image_type})
+    });
+    const d = await resp.json();
+    if (d.success) { document.getElementById(`row-${id}`).style.opacity = '0.3'; setTimeout(() => location.reload(), 800); }
+    else alert(d.error || 'Failed');
+}
+
+function rejectOne(id) {
+    pendingRejectId = id; pendingRejectIds = null;
+    document.getElementById('rejectReason').value = '';
+    document.getElementById('rejectModal').style.display = 'flex';
+}
+
+async function submitReject() {
+    const comment = document.getElementById('rejectReason').value.trim();
+    if (!comment) { alert('Please enter a reason'); return; }
+    document.getElementById('rejectModal').style.display = 'none';
+    if (pendingRejectIds) {
+        const resp = await fetch('/briefs/api/uploads/bulk', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: pendingRejectIds, action: 'reject', comment})
+        });
+        const d = await resp.json();
+        if (d.success) location.reload(); else alert(d.error || 'Failed');
+    } else {
+        const resp = await fetch(`/briefs/api/uploads/${pendingRejectId}/reject`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({comment})
+        });
+        const d = await resp.json();
+        if (d.success) location.reload(); else alert(d.error || 'Failed');
+    }
+}
+
+async function deleteOne(id) {
+    if (!confirm('Delete this upload?')) return;
+    const resp = await fetch(`/briefs/api/uploads/${id}/delete`, {method: 'POST'});
+    const d = await resp.json();
+    if (d.success) location.reload(); else alert(d.error || 'Failed');
+}
+
+function toggleAll(checked) {
+    document.querySelectorAll('.rowCheck').forEach(cb => cb.checked = checked);
+    updateBulkButtons();
+}
+
+function updateBulkButtons() {
+    const checked = document.querySelectorAll('.rowCheck:checked').length > 0;
+    const ab = document.getElementById('bulkApproveBtn');
+    const rb = document.getElementById('bulkRejectBtn');
+    if (ab) ab.disabled = !checked;
+    if (rb) rb.disabled = !checked;
+}
+
+async function bulkAction(action) {
+    const ids = [...document.querySelectorAll('.rowCheck:checked')].map(cb => parseInt(cb.value));
+    if (!ids.length) return;
+    if (action === 'approve') {
+        if (!confirm(`Approve ${ids.length} upload(s)? SKU/type will be read from the fields.`)) return;
+        const items = ids.map(id => ({id, sku: getSku(id), image_type: getType(id)}));
+        const invalid = items.filter(i => !i.sku || !i.image_type);
+        if (invalid.length) { alert(`${invalid.length} item(s) missing SKU or type`); return; }
+        const resp = await fetch('/briefs/api/uploads/bulk', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids, action: 'approve'})
+        });
+        const d = await resp.json();
+        if (d.success) { alert(`${d.count} approved`); location.reload(); }
+        else alert(d.error || 'Failed');
+    } else {
+        pendingRejectId = null; pendingRejectIds = ids;
+        document.getElementById('rejectReason').value = '';
+        document.getElementById('rejectModal').style.display = 'flex';
+    }
+}
+
+// ── Quick preview modal ──────────────────────────────────────────────────────
+
+function previewImage(id) {
+    document.getElementById('previewImg').src = `/briefs/api/uploads/${id}/preview`;
+    document.getElementById('previewModal').style.display = 'flex';
+}
+function previewCutout(sku) {
+    document.getElementById('previewImg').src = `/briefs/api/cutout/${encodeURIComponent(sku)}`;
+    document.getElementById('previewModal').style.display = 'flex';
+}
+
+// ── Slideshow ────────────────────────────────────────────────────────────────
+
+function startSlideshow() {
+    ssIndex = 0;
+    while (ssIndex < uploadData.length && uploadData[ssIndex].actioned) ssIndex++;
+    if (ssIndex >= uploadData.length) { alert('No images to review'); return; }
+    document.getElementById('slideshowModal').style.display = 'flex';
+    document.getElementById('ss-reject-panel').style.display = 'none';
+    document.getElementById('ss-sku').oninput = function() { loadCutout(this.value.trim()); };
+    loadSlide();
+}
+
+function closeSlideshow() {
+    document.getElementById('slideshowModal').style.display = 'none';
+    location.reload();
+}
+
+function loadSlide() {
+    var item = uploadData[ssIndex];
+    var img = document.getElementById('ss-image');
+    var loading = document.getElementById('ss-loading');
+    document.getElementById('ss-counter').textContent  = (ssIndex + 1) + ' / ' + uploadData.length;
+    document.getElementById('ss-filename').textContent = item.filename;
+    document.getElementById('ss-designer').textContent = item.designer;
+    document.getElementById('ss-sku').value   = item.sku;
+    document.getElementById('ss-type').value  = item.imageType;
+    document.getElementById('ss-status').textContent = '';
+    document.getElementById('ss-reject-panel').style.display = 'none';
+    var isPending = !item.actioned;
+    document.getElementById('ss-approve-btn').disabled = !isPending;
+    document.getElementById('ss-reject-btn').disabled  = !isPending;
+    document.getElementById('ss-approve-btn').style.opacity = isPending ? '1' : '0.4';
+    document.getElementById('ss-reject-btn').style.opacity  = isPending ? '1' : '0.4';
+    if (item.actioned === 'approved') document.getElementById('ss-status').innerHTML = '<span style="color:#4caf50;">Approved</span>';
+    else if (item.actioned === 'rejected') document.getElementById('ss-status').innerHTML = '<span style="color:#e53935;">Rejected</span>';
+    document.getElementById('ss-prev').style.visibility = ssIndex > 0 ? 'visible' : 'hidden';
+    document.getElementById('ss-next').style.visibility = ssIndex < uploadData.length - 1 ? 'visible' : 'hidden';
+    img.style.display = 'none'; loading.style.display = 'block'; loading.textContent = 'Loading…';
+    img.src = `/briefs/api/uploads/${item.id}/preview`;
+    img.onload  = function() { loading.style.display = 'none'; img.style.display = 'block'; };
+    img.onerror = function() { loading.textContent = 'Failed to load'; };
+    loadCutout(item.sku);
+}
+
+function loadCutout(sku) {
+    var wrap = document.getElementById('ss-cutout-wrap');
+    var cutout = document.getElementById('ss-cutout');
+    if (sku) {
+        wrap.style.display = '';
+        cutout.src = `/briefs/api/cutout/${encodeURIComponent(sku)}`;
+        cutout.onerror = function() { wrap.style.display = 'none'; };
+        cutout.onload  = function() { wrap.style.display = ''; };
+    } else {
+        wrap.style.display = 'none';
+    }
+}
+
+function slideshowNav(dir) {
+    ssIndex = Math.max(0, Math.min(uploadData.length - 1, ssIndex + dir));
+    loadSlide();
+}
+
+async function slideshowApprove() {
+    var item = uploadData[ssIndex]; if (item.actioned) return;
+    var sku = document.getElementById('ss-sku').value.trim();
+    var imageType = document.getElementById('ss-type').value;
+    if (!sku)       { document.getElementById('ss-status').innerHTML = '<span style="color:#e53935;">Enter SKU</span>'; return; }
+    if (!imageType) { document.getElementById('ss-status').innerHTML = '<span style="color:#e53935;">Select type</span>'; return; }
+    document.getElementById('ss-approve-btn').textContent = 'Pushing…';
+    document.getElementById('ss-approve-btn').disabled = true;
+    const resp = await fetch(`/briefs/api/uploads/${item.id}/approve`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku, image_type: imageType})
+    });
+    document.getElementById('ss-approve-btn').textContent = 'Approve';
+    const d = await resp.json();
+    if (d.success) {
+        item.actioned = 'approved';
+        document.getElementById('ss-status').innerHTML = '<span style="color:#4caf50;">Approved ✓</span>';
+        var row = document.getElementById('row-' + item.id);
+        if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+        setTimeout(function() { if (ssIndex < uploadData.length - 1) slideshowNav(1); }, 800);
+    } else {
+        document.getElementById('ss-status').innerHTML = '<span style="color:#e53935;">' + (d.error || 'Failed') + '</span>';
+        document.getElementById('ss-approve-btn').disabled = false;
+    }
+}
+
+function slideshowReject() {
+    var item = uploadData[ssIndex]; if (item.actioned) return;
+    document.getElementById('ss-reject-panel').style.display = 'block';
+    document.getElementById('ss-reject-comment').value = '';
+    document.getElementById('ss-reject-comment').focus();
+}
+
+async function slideshowConfirmReject() {
+    var item = uploadData[ssIndex];
+    var comment = document.getElementById('ss-reject-comment').value.trim();
+    if (!comment) return;
+    const resp = await fetch(`/briefs/api/uploads/${item.id}/reject`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({comment})
+    });
+    const d = await resp.json();
+    if (d.success) {
+        item.actioned = 'rejected';
+        document.getElementById('ss-reject-panel').style.display = 'none';
+        document.getElementById('ss-status').innerHTML = '<span style="color:#e53935;">Rejected</span>';
+        var row = document.getElementById('row-' + item.id);
+        if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+        setTimeout(function() { if (ssIndex < uploadData.length - 1) slideshowNav(1); }, 800);
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (document.getElementById('slideshowModal').style.display !== 'flex') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft')  { slideshowNav(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { slideshowNav(1);  e.preventDefault(); }
+    else if (e.key === 'Escape')     { closeSlideshow(); e.preventDefault(); }
+});
+</script>
+{% endblock %}

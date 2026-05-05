@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+
+{% block title %}New Content Brief — Roxor Content HUB{% endblock %}
+{% block page_title %}New Content Brief{% endblock %}
+{% block page_subtitle %}Configure SKUs and attributes for your content team{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_briefs.index') }}" class="btn btn-secondary btn-sm">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;">
+<form method="POST" enctype="multipart/form-data" id="brief-form" onsubmit="return serializeState()">
+
+    <!-- Brief Details -->
+    <div class="card" style="margin-bottom:20px;padding:24px;">
+        <div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:16px;">Brief Details</div>
+        <div class="form-group">
+            <label class="form-label" for="name">Brief Name <span style="color:#e53935;">*</span></label>
+            <input class="form-control" type="text" id="name" name="name"
+                   placeholder="e.g. BTBHub EN Descriptions — June 2026" required autofocus>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="deadline">Deadline (optional)</label>
+                <input class="form-control" type="date" id="deadline" name="deadline">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="notes">Notes for writer (optional)</label>
+                <input class="form-control" type="text" id="notes" name="notes"
+                       placeholder="e.g. Tone: warm and direct. Max 150 chars per description.">
+            </div>
+        </div>
+    </div>
+
+    <!-- SKU List -->
+    <div class="card" style="margin-bottom:20px;padding:24px;">
+        <div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:4px;">SKU List</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+            One SKU per line, or upload a plain text file.
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="sku_list">Paste SKUs</label>
+            <textarea class="form-control" id="sku_list" name="sku_list" rows="6"
+                      placeholder="ABC123&#10;DEF456&#10;GHI789"></textarea>
+            <div id="sku-count" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" for="sku_file">Or upload a .txt file</label>
+            <input class="form-control" type="file" id="sku_file" name="sku_file" accept=".txt,.csv">
+        </div>
+    </div>
+
+    <!-- Attribute Configuration -->
+    <div class="card" style="margin-bottom:20px;padding:24px;" id="attr-card">
+        <div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:4px;">
+            Attributes to Write
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
+            Select which attributes your content team needs to fill in.
+        </div>
+
+        <!-- Loading -->
+        <div id="attr-loading" style="text-align:center;padding:28px 0;">
+            <div style="width:36px;height:36px;border:3px solid var(--surface-2);border-top-color:var(--gold);
+                        border-radius:50%;animation:spin 0.9s linear infinite;margin:0 auto 12px;"></div>
+            <div style="font-size:13px;color:var(--text-muted);">Loading attributes from Akeneo…</div>
+        </div>
+
+        <!-- Error -->
+        <div id="attr-error" style="display:none;padding:20px;background:rgba(229,57,53,0.07);
+                                     border-radius:8px;border:1px solid rgba(229,57,53,0.2);">
+            <div style="color:#e53935;font-weight:600;margin-bottom:8px;">⚠ Could not load attributes from Akeneo</div>
+            <div id="attr-error-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="loadData()">Retry</button>
+        </div>
+
+        <!-- Picker (shown after load) -->
+        <div id="attr-loaded" style="display:none;">
+
+            <!-- Scoped -->
+            <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:600;font-size:13px;color:var(--text);">Scoped Attributes</span>
+                        <span style="font-size:11px;background:rgba(26,58,143,0.3);color:#7eb3ff;
+                                     padding:2px 8px;border-radius:4px;margin-left:8px;">per channel</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <select id="scope-selector" class="form-control"
+                                style="font-size:12px;padding:4px 8px;height:auto;width:auto;">
+                            <option value="">— select channel —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="addScopeBlock()" style="white-space:nowrap;">+ Add Channel</button>
+                    </div>
+                </div>
+                <div id="scoped-blocks"></div>
+            </div>
+
+            <!-- Locale -->
+            <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:600;font-size:13px;color:var(--text);">Localised Attributes</span>
+                        <span style="font-size:11px;background:rgba(26,107,58,0.3);color:#7ec99c;
+                                     padding:2px 8px;border-radius:4px;margin-left:8px;">per language</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <select id="locale-selector" class="form-control"
+                                style="font-size:12px;padding:4px 8px;height:auto;width:auto;">
+                            <option value="">— select locale —</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="addLocaleBlock()" style="white-space:nowrap;">+ Add Locale</button>
+                    </div>
+                </div>
+                <div id="locale-blocks"></div>
+            </div>
+
+            <!-- Extra (global) -->
+            <div style="margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div>
+                        <span style="font-weight:600;font-size:13px;color:var(--text);">Extra Attributes</span>
+                        <span style="font-size:11px;background:rgba(122,68,0,0.3);color:#ffb74d;
+                                     padding:2px 8px;border-radius:4px;margin-left:8px;">global</span>
+                    </div>
+                </div>
+                <div id="extra-pills" class="pills-row" style="min-height:36px;"></div>
+                <div id="extra-search" class="attr-search" style="margin-top:8px;"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Reference Data -->
+    <div class="card" id="ref-card" style="margin-bottom:28px;padding:24px;display:none;">
+        <div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:4px;">
+            Reference Data
+            <span style="font-size:11px;font-weight:400;background:rgba(26,82,118,0.3);color:#5dade2;
+                         padding:2px 8px;border-radius:4px;margin-left:8px;">context only — not for writing</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+            Extra columns pre-filled from Akeneo for the writer's reference — highlighted in teal in the spreadsheet.
+        </div>
+        <div id="ref-pills" class="pills-row" style="min-height:36px;"></div>
+        <div id="ref-search" class="attr-search" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- Hidden JSON fields -->
+    <input type="hidden" id="f-scoped"    name="scoped_attrs_json">
+    <input type="hidden" id="f-locale"    name="locale_attrs_json">
+    <input type="hidden" id="f-extra"     name="extra_attrs_json">
+    <input type="hidden" id="f-reference" name="reference_attrs_json">
+
+    <div style="display:flex;gap:12px;align-items:center;">
+        <button type="submit" class="btn btn-primary" id="submit-btn">Generate Brief →</button>
+        <a href="{{ url_for('content_briefs.index') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+</form>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pills-row { display:flex; flex-wrap:wrap; gap:6px; }
+
+.pill {
+    display:inline-flex; align-items:center; gap:4px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius:5px;
+    padding: 3px 8px; font-size: 12px; font-family: monospace;
+}
+.pill button {
+    background:none; border:none; cursor:pointer; color:var(--text-muted);
+    padding:0; font-size:14px; line-height:1; margin-left:2px;
+}
+.pill button:hover { color: #e53935; }
+
+.scope-block, .locale-block {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius:8px; padding:12px 14px; margin-bottom:10px;
+}
+.block-header {
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
+}
+.block-label {
+    font-family:monospace; font-size:13px; font-weight:600; color:var(--gold);
+}
+
+/* Searchable dropdown */
+.attr-search { position:relative; display:inline-block; }
+.attr-search-btn {
+    background: var(--surface-2); border: 1px dashed var(--border);
+    color: var(--text-muted); border-radius:5px; padding:4px 12px;
+    font-size:12px; cursor:pointer; transition:all 0.15s;
+}
+.attr-search-btn:hover { border-color: var(--gold); color: var(--text); }
+.attr-dropdown {
+    position:absolute; top:calc(100% + 4px); left:0; z-index:100;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius:8px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    width:300px; max-height:300px; overflow:hidden;
+    display:flex; flex-direction:column;
+}
+.attr-dropdown input {
+    border:none; border-bottom:1px solid var(--border); background:transparent;
+    color:var(--text); padding:10px 12px; font-size:13px; outline:none;
+}
+.attr-dropdown-list {
+    overflow-y:auto; flex:1;
+}
+.attr-dropdown-item {
+    padding:7px 12px; font-size:12px; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.attr-dropdown-item:hover { background:rgba(242,196,0,0.08); }
+.attr-dropdown-item .code { font-family:monospace; color:var(--text); }
+.attr-dropdown-item .lbl  { font-size:11px; color:var(--text-muted); max-width:140px;
+                              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.attr-dropdown-empty { padding:12px; font-size:12px; color:var(--text-muted); text-align:center; }
+</style>
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+    scoped:    [],   // [{scope, attrs:[code]}]
+    locale:    [],   // [{locale, attrs:[code]}]
+    extra:     [],   // [code]
+    reference: [],   // [code]
+};
+
+let ALL_ATTRS  = [];   // {code, label, scopable, localizable}
+let CHANNELS   = [];   // {code, label}
+let LOCALES    = [];   // {code}
+let openDropId = null;
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+async function loadData() {
+    document.getElementById('attr-loading').style.display = 'block';
+    document.getElementById('attr-error').style.display   = 'none';
+    document.getElementById('attr-loaded').style.display  = 'none';
+    try {
+        const r = await fetch('{{ url_for("content_briefs.api_attributes") }}');
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        ALL_ATTRS = d.attributes || [];
+        CHANNELS  = d.channels  || [];
+        LOCALES   = d.locales   || [];
+        document.getElementById('attr-loading').style.display = 'none';
+        document.getElementById('attr-loaded').style.display  = 'block';
+        document.getElementById('ref-card').style.display     = 'block';
+        populateSelectors();
+        renderAll();
+    } catch(e) {
+        document.getElementById('attr-loading').style.display  = 'none';
+        document.getElementById('attr-error').style.display    = 'block';
+        document.getElementById('attr-error-msg').textContent  = e.message || String(e);
+    }
+}
+
+function attrsByType(type) {
+    if (type === 'scopable')    return ALL_ATTRS.filter(a => a.scopable);
+    if (type === 'localizable') return ALL_ATTRS.filter(a => a.localizable);
+    if (type === 'global')      return ALL_ATTRS.filter(a => !a.scopable && !a.localizable);
+    return ALL_ATTRS;
+}
+
+function attrLabel(code) {
+    const a = ALL_ATTRS.find(x => x.code === code);
+    return a ? a.label : code;
+}
+
+// ── Selectors ─────────────────────────────────────────────────────────────────
+function populateSelectors() {
+    const ss = document.getElementById('scope-selector');
+    ss.innerHTML = '<option value="">— select channel —</option>';
+    CHANNELS.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.code;
+        o.textContent = c.label !== c.code ? `${c.code} — ${c.label}` : c.code;
+        ss.appendChild(o);
+    });
+
+    const ls = document.getElementById('locale-selector');
+    ls.innerHTML = '<option value="">— select locale —</option>';
+    LOCALES.forEach(l => {
+        const o = document.createElement('option');
+        o.value = l.code;
+        o.textContent = l.code;
+        ls.appendChild(o);
+    });
+}
+
+// ── Block management ──────────────────────────────────────────────────────────
+function addScopeBlock() {
+    const sel = document.getElementById('scope-selector');
+    const code = sel.value;
+    if (!code) return;
+    if (S.scoped.find(b => b.scope === code)) { sel.value = ''; return; }
+    S.scoped.push({ scope: code, attrs: [] });
+    sel.value = '';
+    renderScoped();
+}
+
+function addLocaleBlock() {
+    const sel = document.getElementById('locale-selector');
+    const code = sel.value;
+    if (!code) return;
+    if (S.locale.find(b => b.locale === code)) { sel.value = ''; return; }
+    S.locale.push({ locale: code, attrs: [] });
+    sel.value = '';
+    renderLocale();
+}
+
+function removeScope(i)  { S.scoped.splice(i, 1); renderScoped(); }
+function removeLocale(i) { S.locale.splice(i, 1); renderLocale(); }
+
+function addScopedAttr(i, code)  { if (!S.scoped[i].attrs.includes(code))  S.scoped[i].attrs.push(code);  renderScoped(); }
+function addLocaleAttr(i, code)  { if (!S.locale[i].attrs.includes(code))  S.locale[i].attrs.push(code);  renderLocale(); }
+function removeScopedAttr(i, j)  { S.scoped[i].attrs.splice(j, 1); renderScoped(); }
+function removeLocaleAttr(i, j)  { S.locale[i].attrs.splice(j, 1); renderLocale(); }
+
+function addExtraAttr(code)     { if (!S.extra.includes(code))     S.extra.push(code);     renderExtra(); }
+function removeExtraAttr(i)     { S.extra.splice(i, 1);     renderExtra(); }
+function addRefAttr(code)       { if (!S.reference.includes(code)) S.reference.push(code); renderRef(); }
+function removeRefAttr(i)       { S.reference.splice(i, 1); renderRef(); }
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll() { renderScoped(); renderLocale(); renderExtra(); renderRef(); }
+
+function renderScoped() {
+    const el = document.getElementById('scoped-blocks');
+    el.innerHTML = '';
+    S.scoped.forEach((block, i) => {
+        const usedCodes = block.attrs;
+        const pool = attrsByType('scopable').filter(a => !usedCodes.includes(a.code));
+        const div  = document.createElement('div');
+        div.className = 'scope-block';
+        div.innerHTML = `
+            <div class="block-header">
+                <span class="block-label">${block.scope}</span>
+                <button type="button" class="btn btn-sm"
+                        onclick="removeScope(${i})"
+                        style="font-size:11px;padding:2px 8px;background:rgba(229,57,53,0.1);
+                               color:#e53935;border:1px solid rgba(229,57,53,0.3);">Remove</button>
+            </div>
+            <div class="pills-row" style="margin-bottom:8px;">
+                ${usedCodes.map((c,j) => `
+                    <span class="pill">${attrLabel(c)}<span style="font-size:10px;color:var(--text-muted);margin-left:2px;">(${c})</span>
+                        <button type="button" onclick="removeScopedAttr(${i},${j})">×</button>
+                    </span>`).join('')}
+            </div>
+            <div id="scoped-search-${i}" class="attr-search"></div>
+        `;
+        el.appendChild(div);
+        buildSearch(`scoped-search-${i}`, pool, code => addScopedAttr(i, code));
+    });
+}
+
+function renderLocale() {
+    const el = document.getElementById('locale-blocks');
+    el.innerHTML = '';
+    S.locale.forEach((block, i) => {
+        const usedCodes = block.attrs;
+        const pool = attrsByType('localizable').filter(a => !usedCodes.includes(a.code));
+        const div  = document.createElement('div');
+        div.className = 'locale-block';
+        div.innerHTML = `
+            <div class="block-header">
+                <span class="block-label">${block.locale}</span>
+                <button type="button" class="btn btn-sm"
+                        onclick="removeLocale(${i})"
+                        style="font-size:11px;padding:2px 8px;background:rgba(229,57,53,0.1);
+                               color:#e53935;border:1px solid rgba(229,57,53,0.3);">Remove</button>
+            </div>
+            <div class="pills-row" style="margin-bottom:8px;">
+                ${usedCodes.map((c,j) => `
+                    <span class="pill">${attrLabel(c)}<span style="font-size:10px;color:var(--text-muted);margin-left:2px;">(${c})</span>
+                        <button type="button" onclick="removeLocaleAttr(${i},${j})">×</button>
+                    </span>`).join('')}
+            </div>
+            <div id="locale-search-${i}" class="attr-search"></div>
+        `;
+        el.appendChild(div);
+        buildSearch(`locale-search-${i}`, pool, code => addLocaleAttr(i, code));
+    });
+}
+
+function renderExtra() {
+    const pills = document.getElementById('extra-pills');
+    pills.innerHTML = S.extra.map((c, i) => `
+        <span class="pill">${attrLabel(c)}<span style="font-size:10px;color:var(--text-muted);margin-left:2px;">(${c})</span>
+            <button type="button" onclick="removeExtraAttr(${i})">×</button>
+        </span>`).join('');
+    const pool = attrsByType('global').filter(a => !S.extra.includes(a.code));
+    buildSearch('extra-search', pool, code => addExtraAttr(code));
+}
+
+function renderRef() {
+    const pills = document.getElementById('ref-pills');
+    pills.innerHTML = S.reference.map((c, i) => `
+        <span class="pill" style="border-color:rgba(93,173,226,0.4);">${attrLabel(c)}<span style="font-size:10px;color:var(--text-muted);margin-left:2px;">(${c})</span>
+            <button type="button" onclick="removeRefAttr(${i})">×</button>
+        </span>`).join('');
+    const pool = ALL_ATTRS.filter(a => !S.reference.includes(a.code));
+    buildSearch('ref-search', pool, code => addRefAttr(code));
+}
+
+// ── Search dropdown ───────────────────────────────────────────────────────────
+function buildSearch(containerId, pool, onSelect) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = `
+        <button type="button" class="attr-search-btn" data-sid="${containerId}">+ Add attribute</button>
+        <div class="attr-dropdown" id="dd-${containerId}" style="display:none;">
+            <input type="text" placeholder="Search attributes…" oninput="filterDD('${containerId}', this.value)">
+            <div class="attr-dropdown-list" id="ddl-${containerId}"></div>
+        </div>
+    `;
+    container.querySelector('.attr-search-btn').onclick = () => toggleDD(containerId);
+    _ddPool[containerId] = { pool, onSelect };
+    renderDD(containerId, '');
+}
+
+const _ddPool = {};
+
+function toggleDD(sid) {
+    const dd = document.getElementById(`dd-${sid}`);
+    if (!dd) return;
+    const isOpen = dd.style.display !== 'none';
+    closeAllDD();
+    if (!isOpen) {
+        dd.style.display = 'flex';
+        dd.querySelector('input').focus();
+        openDropId = sid;
+    }
+}
+
+function closeAllDD() {
+    document.querySelectorAll('.attr-dropdown').forEach(d => d.style.display = 'none');
+    openDropId = null;
+}
+
+function filterDD(sid, q) {
+    renderDD(sid, q);
+}
+
+function renderDD(sid, q) {
+    const list = document.getElementById(`ddl-${sid}`);
+    if (!list) return;
+    const { pool, onSelect } = _ddPool[sid] || {};
+    if (!pool) return;
+    const filtered = q ? pool.filter(a =>
+        a.code.toLowerCase().includes(q.toLowerCase()) ||
+        a.label.toLowerCase().includes(q.toLowerCase())
+    ) : pool;
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="attr-dropdown-empty">No attributes found</div>';
+        return;
+    }
+    list.innerHTML = filtered.slice(0, 80).map(a => `
+        <div class="attr-dropdown-item" onclick="selectDD('${sid}','${a.code}')">
+            <span class="code">${a.code}</span>
+            <span class="lbl">${a.label !== a.code ? a.label : ''}</span>
+        </div>
+    `).join('');
+}
+
+function selectDD(sid, code) {
+    const { onSelect } = _ddPool[sid] || {};
+    if (onSelect) onSelect(code);
+    closeAllDD();
+}
+
+// Close on outside click
+document.addEventListener('click', e => {
+    if (!e.target.closest('.attr-search')) closeAllDD();
+});
+
+// ── Form submit ───────────────────────────────────────────────────────────────
+function serializeState() {
+    const scoped = {};
+    S.scoped.forEach(b => { if (b.attrs.length) scoped[b.scope] = b.attrs; });
+    const locale = {};
+    S.locale.forEach(b => { if (b.attrs.length) locale[b.locale] = b.attrs; });
+    document.getElementById('f-scoped').value    = JSON.stringify(scoped);
+    document.getElementById('f-locale').value    = JSON.stringify(locale);
+    document.getElementById('f-extra').value     = JSON.stringify(S.extra);
+    document.getElementById('f-reference').value = JSON.stringify(S.reference);
+
+    if (!Object.keys(scoped).length && !Object.keys(locale).length && !S.extra.length) {
+        alert('Please select at least one attribute to write.');
+        return false;
+    }
+    return true;
+}
+
+// ── SKU count ────────────────────────────────────────────────────────────────
+const skuArea = document.getElementById('sku_list');
+const skuHint = document.getElementById('sku-count');
+function updateSKUCount() {
+    const u = [...new Set(skuArea.value.split('\n').map(s=>s.trim()).filter(s=>s))];
+    skuHint.textContent = u.length ? `${u.length} SKU${u.length>1?'s':''} detected` : '';
+}
+skuArea.addEventListener('input', updateSKUCount);
+document.getElementById('sku_file').addEventListener('change', function(e) {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => { skuArea.value = ev.target.result; updateSKUCount(); };
+    r.readAsText(f);
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+{% endblock %}
+{% endblock %}

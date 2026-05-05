@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}Upload Images{% endblock %}
+{% block page_title %}Upload Images{% endblock %}
+{% block page_subtitle %}Submit lifestyle images for review{% endblock %}
+
+{% block topbar_actions %}
+{% if current_user.role == 'admin' %}
+<a href="{{ url_for('briefs.uploads_review') }}" class="btn btn-primary">Review Queue</a>
+{% endif %}
+<a href="{{ url_for('briefs.index') }}" class="btn btn-secondary">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+
+    <!-- Upload panel -->
+    <div class="card">
+        <div class="card-header"><span class="card-title">Upload Files</span></div>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">Accepted: JPG, PNG, TIFF · Files named <code>SKU_ls1.jpg</code>, <code>SKU_ls2.jpg</code> etc. are auto-detected.</p>
+
+        <div id="dropZone" style="border:2px dashed var(--border); border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color .15s; margin-bottom:16px;"
+             onclick="document.getElementById('fileInput').click()"
+             ondragover="event.preventDefault(); this.style.borderColor='var(--gold)'"
+             ondragleave="this.style.borderColor='var(--border)'"
+             ondrop="handleDrop(event)">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="32" height="32" style="color:var(--text-muted); margin:0 auto 12px; display:block;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+            </svg>
+            <div style="font-size:13px; color:var(--text-muted);">Drag & drop images here or click to select</div>
+        </div>
+        <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.tiff,.tif" style="display:none;" onchange="handleFiles(this.files)">
+
+        <div class="form-group">
+            <label class="form-label">Link to Brief (optional)</label>
+            <select id="briefSelect" class="form-control">
+                <option value="">— Select brief —</option>
+                {% for b in briefs %}<option value="{{ b.id }}">{{ b.name }} ({{ b.sku_count }} SKUs)</option>{% endfor %}
+            </select>
+        </div>
+
+        <div id="fileList" style="margin-bottom:16px; display:none;">
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Ready to upload:</div>
+            <div id="fileItems"></div>
+        </div>
+
+        <button id="uploadBtn" class="btn btn-primary" onclick="uploadFiles()" disabled style="width:100%;">Upload</button>
+        <div id="uploadProgress" style="display:none; margin-top:12px;">
+            <div style="height:4px; background:var(--surface-2); border-radius:2px; overflow:hidden;">
+                <div id="uploadFill" style="height:100%; width:0%; background:var(--gold); transition:width .2s;"></div>
+            </div>
+            <div id="uploadStatus" style="font-size:12px; color:var(--text-muted); margin-top:6px; text-align:center;"></div>
+        </div>
+    </div>
+
+    <!-- My uploads -->
+    <div class="card">
+        <div class="card-header"><span class="card-title">My Uploads</span></div>
+        {% if uploads %}
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>File</th><th>SKU</th><th>Type</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                {% for u in uploads %}
+                <tr>
+                    <td style="font-size:12px; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ u.original_filename }}">{{ u.original_filename }}</td>
+                    <td style="font-size:12px;">{{ u.detected_sku or '—' }}</td>
+                    <td style="font-size:11px; color:var(--text-muted);">{{ u.image_type or '—' }}</td>
+                    <td>
+                        {% if u.status == 'approved' %}<span style="color:var(--success); font-size:12px; font-weight:600;">✓ Approved</span>
+                        {% elif u.status == 'rejected' %}<span style="color:var(--danger); font-size:12px; font-weight:600;">✗ Rejected</span>
+                        {% else %}<span style="color:var(--warning); font-size:12px;">Pending</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if u.status == 'rejected' %}
+                        <button class="btn btn-secondary btn-sm" onclick="showResubmit({{ u.id }})">Re-upload</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% if u.review_comment %}
+                <tr><td colspan="5" style="font-size:11px; color:var(--danger); padding:0 12px 8px; font-style:italic;">{{ u.review_comment }}</td></tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:var(--text-muted); font-size:13px;">No uploads yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Resubmit modal -->
+<div id="resubmitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:440px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Re-upload File</span></div>
+        <input type="hidden" id="resubmitId">
+        <div class="form-group">
+            <label class="form-label">New File</label>
+            <input type="file" id="resubmitFile" class="form-control" accept=".jpg,.jpeg,.png,.tiff,.tif">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('resubmitModal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" onclick="submitResubmit()">Re-upload</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedFiles = [];
+
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').style.borderColor = 'var(--border)';
+    handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+    selectedFiles = [...selectedFiles, ...Array.from(files)];
+    renderFileList();
+}
+
+function renderFileList() {
+    const list = document.getElementById('fileItems');
+    const wrap = document.getElementById('fileList');
+    if (selectedFiles.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    list.innerHTML = selectedFiles.map((f, i) =>
+        `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); font-size:12px;">
+            <span>${f.name}</span>
+            <button type="button" onclick="removeFile(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger); font-size:14px;">✕</button>
+        </div>`
+    ).join('');
+    document.getElementById('uploadBtn').disabled = false;
+}
+
+function removeFile(idx) {
+    selectedFiles.splice(idx, 1);
+    renderFileList();
+    if (selectedFiles.length === 0) document.getElementById('uploadBtn').disabled = true;
+}
+
+async function uploadFiles() {
+    if (!selectedFiles.length) return;
+    const fd = new FormData();
+    selectedFiles.forEach(f => fd.append('files', f));
+    const briefId = document.getElementById('briefSelect').value;
+    if (briefId) fd.append('brief_id', briefId);
+
+    document.getElementById('uploadProgress').style.display = 'block';
+    document.getElementById('uploadFill').style.width = '50%';
+    document.getElementById('uploadStatus').textContent = 'Uploading…';
+    document.getElementById('uploadBtn').disabled = true;
+
+    const resp = await fetch('/briefs/api/uploads', { method: 'POST', body: fd });
+    const d = await resp.json();
+
+    document.getElementById('uploadFill').style.width = '100%';
+    if (d.success) {
+        document.getElementById('uploadStatus').textContent = `${d.count} file(s) uploaded successfully`;
+        document.getElementById('uploadStatus').style.color = 'var(--success)';
+        selectedFiles = [];
+        document.getElementById('fileList').style.display = 'none';
+        setTimeout(() => location.reload(), 1500);
+    } else {
+        document.getElementById('uploadStatus').textContent = d.error || 'Upload failed';
+        document.getElementById('uploadStatus').style.color = 'var(--danger)';
+        document.getElementById('uploadBtn').disabled = false;
+    }
+}
+
+function showResubmit(id) {
+    document.getElementById('resubmitId').value = id;
+    document.getElementById('resubmitFile').value = '';
+    document.getElementById('resubmitModal').style.display = 'flex';
+}
+
+async function submitResubmit() {
+    const id = document.getElementById('resubmitId').value;
+    const file = document.getElementById('resubmitFile').files[0];
+    if (!file) { alert('Please select a file'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    const resp = await fetch(`/briefs/api/uploads/${id}/resubmit`, { method: 'POST', body: fd });
+    const d = await resp.json();
+    if (d.success) location.reload();
+    else alert(d.error || 'Failed');
+}
+</script>
+{% endblock %}

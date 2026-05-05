@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+{% block title %}{{ brand_name }} — Content Tracker{% endblock %}
+{% block page_title %}{{ brand_name }}{% endblock %}
+{% block page_subtitle %}{{ total_models }} models · {{ total_skus }} sales codes{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_tracker.index') }}" class="btn btn-sm btn-secondary">← All Brands</a>
+{% if asset_gap_count or content_gap_count %}
+<a href="{{ url_for('content_tracker.gaps_view', brand_code=brand_code) }}" class="btn btn-sm" style="background:rgba(229,57,53,0.12);border:1px solid #e53935;color:#e53935;">
+    Gaps ({{ asset_gap_count + content_gap_count }})
+</a>
+{% endif %}
+<button class="btn btn-sm btn-secondary" id="btnScanAssets" onclick="startScan('assets')"
+    {% if assets_scanning %}disabled{% endif %}>
+    {% if assets_scanning %}Scanning Assets…{% else %}Scan Assets{% endif %}
+</button>
+<button class="btn btn-sm btn-primary" id="btnScanContent" onclick="startScan('content')"
+    {% if content_scanning %}disabled{% endif %}>
+    {% if content_scanning %}Scanning Content…{% else %}Scan Content{% endif %}
+</button>
+{% endblock %}
+
+{% block head %}
+<script src="{{ url_for('content_tracker.static', filename='chart.min.js') }}"></script>
+<style>
+    /* Scan progress bars */
+    .scan-bar { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 14px; margin-bottom:8px; font-size:12px; display:none; align-items:center; gap:8px; }
+    .scan-bar.active { display:flex; }
+    .scan-bar-label { color:var(--text-muted); min-width:64px; }
+    .scan-bar-phase { color:var(--gold); animation:pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    /* Tabs */
+    .tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--border); }
+    .tab-btn { padding:8px 20px; background:none; border:none; border-bottom:3px solid transparent; color:var(--text-muted); font-size:13px; font-weight:600; cursor:pointer; margin-bottom:-2px; transition:all 0.15s; }
+    .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+
+    /* CS Cart toggle */
+    .cs-cart-toggle { display:inline-flex; border:1px solid var(--border); border-radius:5px; overflow:hidden; margin-bottom:14px; font-size:12px; }
+    .cs-cart-toggle button { padding:5px 14px; background:none; border:none; color:var(--text-muted); cursor:pointer; transition:all 0.15s; }
+    .cs-cart-toggle button.active { background:var(--gold); color:#000; font-weight:600; }
+
+    /* Charts */
+    .charts-row { display:grid; grid-template-columns:1fr 220px; gap:16px; margin-bottom:20px; }
+    .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; }
+    .chart-card-title { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px; font-weight:600; }
+    .charts-row-full { display:grid; grid-template-columns:1fr; gap:16px; margin-bottom:20px; }
+    .worst-section { margin-bottom:20px; }
+    .worst-title { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; font-weight:600; }
+    .worst-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .worst-table td { padding:5px 8px; border-bottom:1px solid var(--border); }
+    .worst-table td:first-child { font-family:monospace; }
+    .worst-table td:last-child { text-align:right; font-weight:700; }
+
+    /* Models table */
+    .search-bar { margin-bottom:14px; }
+    .search-bar input { width:100%; max-width:360px; padding:7px 12px; background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:13px; }
+    .search-bar input:focus { outline:none; border-color:var(--gold); }
+    .models-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .models-table th { text-align:left; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap; }
+    .models-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .models-table tr:hover td { background:var(--surface-2); }
+    .model-link { color:var(--text); text-decoration:none; font-weight:600; font-family:monospace; font-size:12px; }
+    .model-link:hover { color:var(--gold); }
+    .variant-count { color:var(--text-muted); font-size:12px; }
+    .cov-cell { text-align:center; min-width:48px; }
+    .cov-pip { display:inline-block; width:30px; height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden; vertical-align:middle; }
+    .cov-pip-fill { height:100%; border-radius:3px; background:var(--gold); }
+    .cov-label { font-size:10px; color:var(--text-muted); display:block; margin-top:2px; }
+    .cov-full { color:#4caf50; }
+    .cov-none { color:var(--text-muted); opacity:0.35; }
+    .fam-header { font-size:10px; max-width:48px; word-break:break-word; text-align:center; }
+    .content-pct { font-size:12px; font-weight:600; }
+
+    @media (max-width: 768px) {
+        .charts-row { grid-template-columns:1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Scan progress bars -->
+<div class="scan-bar {% if assets_scanning %}active{% endif %}" id="assetsScanBar">
+    <span class="scan-bar-label">Assets</span>
+    <span class="scan-bar-phase" id="assetsPhase">{{ assets_phase or 'Scanning…' }}</span>
+</div>
+<div class="scan-bar {% if content_scanning %}active{% endif %}" id="contentScanBar">
+    <span class="scan-bar-label">Content</span>
+    <span class="scan-bar-phase" id="contentPhase">{{ content_phase or 'Scanning…' }}</span>
+</div>
+
+<!-- Main tabs -->
+<div class="tabs">
+    <button class="tab-btn active" id="tabBtnImagery"  onclick="showTab('imagery',  this)">Imagery</button>
+    <button class="tab-btn"        id="tabBtnContent"  onclick="showTab('content',  this)">Content</button>
+</div>
+
+<!-- ── IMAGERY TAB ─────────────────────────────────────────────────────── -->
+<div class="tab-pane active" id="tab-imagery">
+
+{% if total_skus > 0 and active_families %}
+<!-- CS Cart toggle -->
+{% if cs_cart_count > 0 %}
+<div class="cs-cart-toggle" id="csCartToggle">
+    <button class="active" onclick="setCsFilter('all', this)">All ({{ total_skus }})</button>
+    <button onclick="setCsFilter('cs', this)">CS Cart ({{ cs_cart_count }})</button>
+</div>
+{% endif %}
+
+<!-- Charts -->
+<div class="charts-row">
+    <div class="chart-card">
+        <div class="chart-card-title">Coverage by asset family — % of sales codes</div>
+        <canvas id="assetBarChart" height="160"></canvas>
+    </div>
+    <div class="chart-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+        <div class="chart-card-title" style="text-align:center;">Has Cutout 1</div>
+        <canvas id="assetDonutChart" width="160" height="160"></canvas>
+        <div style="margin-top:8px;font-size:22px;font-weight:700;color:{{ '#4caf50' if chart_data.donut.pct == 100 else 'var(--gold)' }}">
+            {{ chart_data.donut.pct }}%
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);">{{ chart_data.donut.imaged }} / {{ total_skus }} SKUs</div>
+    </div>
+</div>
+
+{% if chart_data.worst_assets %}
+<div class="worst-section">
+    <div class="worst-title">Weakest models — imagery</div>
+    <div style="overflow-x:auto;">
+    <table class="worst-table">
+    {% for code, pct in chart_data.worst_assets %}
+    <tr>
+        <td><a href="{{ url_for('content_tracker.model_view', model_code=code) }}" style="color:var(--text);text-decoration:none;">{{ code }}</a></td>
+        <td>
+            <div class="cov-pip" style="width:80px;display:inline-block;vertical-align:middle;">
+                <div class="cov-pip-fill" style="width:{{ pct }}%;background:{% if pct < 50 %}#e53935{% elif pct < 80 %}var(--gold){% else %}#4caf50{% endif %}"></div>
+            </div>
+        </td>
+        <td style="color:{% if pct < 50 %}#e53935{% elif pct < 80 %}var(--gold){% else %}#4caf50{% endif %}">{{ pct }}%</td>
+    </tr>
+    {% endfor %}
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+<!-- Search + Models table -->
+<div class="search-bar">
+    <input type="text" id="modelSearchI" placeholder="Filter by model code…" oninput="filterModels('imagery')">
+</div>
+
+{% if not models %}
+<div style="text-align:center;padding:48px;color:var(--text-muted);">No data yet — run a scan to populate this brand.</div>
+{% else %}
+<div style="overflow-x:auto;">
+<table class="models-table" id="modelsTableImagery">
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>SKUs</th>
+            {% for fam in active_families %}
+            <th class="fam-header cov-cell">{{ asset_labels.get(fam, fam) }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for model_code, model in models %}
+    <tr class="model-row-imagery" data-model="{{ model_code }}" data-cs="{{ 1 if model.cs_cart_count > 0 else 0 }}">
+        <td><a href="{{ url_for('content_tracker.model_view', model_code=model_code) }}" class="model-link">{{ model_code }}</a></td>
+        <td class="variant-count">{{ model.count }}</td>
+        {% for fam in active_families %}
+        {% set has = model.asset_totals.get(fam, 0) %}
+        {% set total = model.count %}
+        {% set pct = ((has / total) * 100) | int if total else 0 %}
+        <td class="cov-cell">
+            {% if has == total and total > 0 %}<span class="cov-full">✓</span>
+            {% elif has == 0 %}<span class="cov-none">—</span>
+            {% else %}
+            <div class="cov-pip"><div class="cov-pip-fill" style="width:{{ pct }}%"></div></div>
+            <span class="cov-label">{{ has }}/{{ total }}</span>
+            {% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+</div>
+
+<!-- ── CONTENT TAB ─────────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-content">
+
+{% if required_attrs and total_skus > 0 %}
+<!-- Charts -->
+<div class="charts-row-full">
+    <div class="chart-card">
+        <div class="chart-card-title">Content coverage by scope — % of required attributes filled</div>
+        <canvas id="contentScopeChart" height="120"></canvas>
+    </div>
+</div>
+
+{% if chart_data.worst_content %}
+<div class="worst-section">
+    <div class="worst-title">Weakest models — content</div>
+    <div style="overflow-x:auto;">
+    <table class="worst-table">
+    {% for code, pct in chart_data.worst_content %}
+    <tr>
+        <td><a href="{{ url_for('content_tracker.model_view', model_code=code) }}" style="color:var(--text);text-decoration:none;">{{ code }}</a></td>
+        <td>
+            <div class="cov-pip" style="width:80px;display:inline-block;vertical-align:middle;">
+                <div class="cov-pip-fill" style="width:{{ pct }}%;background:{% if pct < 50 %}#e53935{% elif pct < 80 %}var(--gold){% else %}#4caf50{% endif %}"></div>
+            </div>
+        </td>
+        <td style="color:{% if pct < 50 %}#e53935{% elif pct < 80 %}var(--gold){% else %}#4caf50{% endif %}">{{ pct }}%</td>
+    </tr>
+    {% endfor %}
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{% elif not required_attrs %}
+<div style="text-align:center;padding:48px;color:var(--text-muted);">
+    No content config for this brand. <a href="{{ url_for('content_tracker.config_view') }}" style="color:var(--gold);">Edit config →</a>
+</div>
+{% endif %}
+
+<!-- Search + Models table -->
+<div class="search-bar">
+    <input type="text" id="modelSearchC" placeholder="Filter by model code…" oninput="filterModels('content')">
+</div>
+
+{% if not models %}
+<div style="text-align:center;padding:48px;color:var(--text-muted);">No data yet — run a scan first.</div>
+{% else %}
+<div style="overflow-x:auto;">
+<table class="models-table" id="modelsTableContent">
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>SKUs</th>
+            {% if required_attrs %}<th style="min-width:80px;">Content %</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for model_code, model in models %}
+    <tr class="model-row-content" data-model="{{ model_code }}">
+        <td><a href="{{ url_for('content_tracker.model_view', model_code=model_code) }}" class="model-link">{{ model_code }}</a></td>
+        <td class="variant-count">{{ model.count }}</td>
+        {% if required_attrs %}
+        {% set cpct = model.content_pct %}
+        <td class="cov-cell">
+            {% if cpct is none %}<span class="cov-none">—</span>
+            {% elif cpct == 100 %}<span class="cov-full content-pct">100%</span>
+            {% else %}
+            <span class="content-pct" style="color:{% if cpct >= 80 %}var(--gold){% else %}#e53935{% endif %}">{{ cpct }}%</span>
+            {% endif %}
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BASE        = '/content-tracker';
+const BRAND       = '{{ brand_code }}';
+const GOLD        = '#F2C400';
+const NAVY        = '#02054F';
+const SURFACE2    = getComputedStyle(document.documentElement).getPropertyValue('--surface-2').trim() || '#1a1f3e';
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+
+// ── CS Cart filter ────────────────────────────────────────────────────────────
+let currentFilter = 'all';
+function setCsFilter(mode, btn) {
+    currentFilter = mode;
+    document.querySelectorAll('#csCartToggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyFilters('imagery');
+    updateAssetCharts(mode);
+}
+
+function applyFilters(tab) {
+    const search = (document.getElementById('modelSearch' + (tab === 'imagery' ? 'I' : 'C')) || {}).value?.toLowerCase() || '';
+    const rows   = document.querySelectorAll('.model-row-' + tab);
+    rows.forEach(row => {
+        const code  = (row.dataset.model || '').toLowerCase();
+        const cs    = row.dataset.cs === '1';
+        const passSearch = !search || code.includes(search);
+        const passCs     = currentFilter !== 'cs' || cs;
+        row.style.display = (passSearch && passCs) ? '' : 'none';
+    });
+}
+
+function filterModels(tab) { applyFilters(tab); }
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+        x: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' }, min: 0, max: 100 },
+    },
+};
+
+// Asset bar chart
+const assetLabels  = {{ active_families | tojson }};
+const assetLabelNames = {{ active_families | map('extract', asset_labels) | list | tojson }};
+const assetPctsAll = {{ (active_families | map('extract', chart_data.asset_pcts) | list) | tojson }};
+
+let assetBarChart;
+if (document.getElementById('assetBarChart')) {
+    assetBarChart = new Chart(document.getElementById('assetBarChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: assetLabelNames,
+            datasets: [{
+                data: assetPctsAll,
+                backgroundColor: assetPctsAll.map(v => v === 100 ? '#4caf50' : v < 50 ? '#e53935' : GOLD),
+                borderRadius: 3,
+            }],
+        },
+        options: { ...CHART_DEFAULTS, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + '%' } } } },
+    });
+}
+
+// Asset donut chart
+if (document.getElementById('assetDonutChart')) {
+    new Chart(document.getElementById('assetDonutChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Has Cutout 1', 'Missing'],
+            datasets: [{
+                data: [{{ chart_data.donut.imaged }}, {{ chart_data.donut.missing }}],
+                backgroundColor: ['#4caf50', 'rgba(255,255,255,0.06)'],
+                borderWidth: 0,
+            }],
+        },
+        options: {
+            responsive: false,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed + ' SKUs' } } },
+        },
+    });
+}
+
+// Content scope chart
+const scopeLabels = {{ chart_data.content_scope_pcts.keys() | list | tojson }};
+const scopeData   = {{ chart_data.content_scope_pcts.values() | list | tojson }};
+
+if (document.getElementById('contentScopeChart') && scopeLabels.length) {
+    new Chart(document.getElementById('contentScopeChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: scopeLabels,
+            datasets: [{
+                data: scopeData,
+                backgroundColor: scopeData.map(v => v === 100 ? '#4caf50' : v < 50 ? '#e53935' : GOLD),
+                borderRadius: 3,
+            }],
+        },
+        options: { ...CHART_DEFAULTS, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + '%' } } } },
+    });
+}
+
+// Recompute asset bar for CS Cart filter (placeholder — would need per-SKU data from server)
+function updateAssetCharts(mode) {
+    // Chart data is server-rendered for all SKUs — CS Cart filtering is table-only for now
+    // A future enhancement could fetch CS-Cart-filtered stats from /api/brand-stats?cs_cart=1
+}
+
+// ── Scan progress ─────────────────────────────────────────────────────────────
+function startScan(type) {
+    const btn     = document.getElementById(type === 'assets' ? 'btnScanAssets' : 'btnScanContent');
+    const bar     = document.getElementById(type === 'assets' ? 'assetsScanBar' : 'contentScanBar');
+    const phase   = document.getElementById(type === 'assets' ? 'assetsPhase'   : 'contentPhase');
+
+    btn.disabled = true;
+    btn.textContent = type === 'assets' ? 'Scanning Assets…' : 'Scanning Content…';
+    bar.classList.add('active');
+    phase.textContent = 'Starting…';
+
+    fetch(`${BASE}/api/scan/${type}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({brand: BRAND}),
+    }).then(r => {
+        if (!r.ok) return r.json().then(e => { phase.textContent = '✗ ' + (e.error || 'Error'); btn.disabled = false; btn.textContent = type === 'assets' ? 'Scan Assets' : 'Scan Content'; });
+        pollScan(type, btn, bar, phase);
+    });
+}
+
+function pollScan(type, btn, bar, phase) {
+    const iv = setInterval(async () => {
+        const s   = await fetch(`${BASE}/api/scan/status?brand=${BRAND}`).then(r => r.json());
+        const sub = s[type] || {};
+        phase.textContent = sub.phase || 'Running…';
+        if (sub.status === 'complete') { clearInterval(iv); setTimeout(() => location.reload(), 800); }
+        if (sub.status === 'failed')   { clearInterval(iv); phase.textContent = '✗ ' + (sub.error || 'Failed'); btn.disabled = false; btn.textContent = type === 'assets' ? 'Scan Assets' : 'Scan Content'; }
+    }, 2000);
+}
+
+// Resume polling for active scans on page load
+{% if assets_scanning %}
+pollScan('assets', document.getElementById('btnScanAssets'), document.getElementById('assetsScanBar'), document.getElementById('assetsPhase'));
+{% endif %}
+{% if content_scanning %}
+pollScan('content', document.getElementById('btnScanContent'), document.getElementById('contentScanBar'), document.getElementById('contentPhase'));
+{% endif %}
+</script>
+{% endblock %}

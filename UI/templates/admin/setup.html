@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Set Up Your Account — Roxor Content HUB</title>
+  <link rel="stylesheet" href="/static/css/hub.css">
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+
+    .setup-box {
+      width: 100%;
+      max-width: 440px;
+      padding: 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin: 24px;
+    }
+
+    .setup-logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .setup-logo .hub-label {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .setup-logo h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .email-display {
+      background: var(--navy-dark);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 14px;
+      color: var(--gold);
+      font-weight: 500;
+    }
+
+    .access-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .access-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(242,196,0,0.1);
+      color: var(--gold);
+      border: 1px solid rgba(242,196,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="setup-box">
+
+    <div class="setup-logo">
+      <span class="hub-label">Roxor Group</span>
+      <h1>Content HUB</h1>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error" style="margin-bottom:24px;">{{ error }}</div>
+      <p style="font-size:13px;color:var(--text-muted);text-align:center;">
+        Ask an admin to send you a fresh invite.
+      </p>
+
+    {% else %}
+
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">
+        You've been invited to Roxor Content HUB. Set a password to activate your account.
+      </p>
+
+      {# Show access being granted #}
+      {% if invite %}
+        <div style="margin-bottom:20px;padding:12px 14px;background:var(--navy-dark);border:1px solid var(--border);border-radius:8px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">Your Access</div>
+          {% if invite.role == 'chairman_mao' %}
+            <span class="status-badge active" style="background:rgba(242,196,0,0.15);color:var(--gold);">★ Chairman Mao</span>
+          {% elif invite.role == 'admin' %}
+            <span class="status-badge active">Admin — full access</span>
+          {% else %}
+            <div class="access-pills">
+              {% if tools and tool_meta %}
+                {% set has_any = [] %}
+                {% for t in tools %}
+                  {% if invite['access_' + t] %}
+                    {% set _ = has_any.append(t) %}
+                    <span class="access-pill">{{ tool_meta[t].label }}</span>
+                  {% endif %}
+                {% endfor %}
+                {% if not has_any %}
+                  <span style="font-size:12px;color:var(--text-muted);">No tools yet — your admin can grant access later.</span>
+                {% endif %}
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {# Errors #}
+      {% if errors %}
+        <div style="margin-bottom:16px;">
+          {% for err in errors %}
+            <div class="alert alert-error" style="margin-bottom:6px;">{{ err }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="POST">
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <div class="email-display">{{ invite.email }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">This is what you'll use to log in.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="display_name">Your Name</label>
+          <input class="form-control" type="text" id="display_name" name="display_name"
+                 value="{{ display_name or '' }}" placeholder="e.g. Zach Wright"
+                 required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input class="form-control" type="password" id="password" name="password"
+                 placeholder="Min 8 characters" autocomplete="new-password" required>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px;">
+          <label class="form-label" for="confirm_password">Confirm Password</label>
+          <input class="form-control" type="password" id="confirm_password" name="confirm_password"
+                 placeholder="Same again" autocomplete="new-password" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;">
+          Activate Account
+        </button>
+
+      </form>
+
+    {% endif %}
+
+  </div>
+
+</body>
+</html>

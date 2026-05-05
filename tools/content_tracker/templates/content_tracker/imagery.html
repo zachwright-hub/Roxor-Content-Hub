@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Imagery Tracker — Roxor Content HUB{% endblock %}
+{% block page_title %}Imagery Tracker{% endblock %}
+{% block page_subtitle %}Asset family coverage by brand, organised by product model{% endblock %}
+
+{% block head %}
+<style>
+    .brand-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+    .brand-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; display:flex; flex-direction:column; gap:12px; }
+    .brand-card:hover { border-color:var(--gold); }
+    .brand-card-header { display:flex; align-items:center; justify-content:space-between; }
+    .brand-card-name { font-size:16px; font-weight:700; color:var(--text); text-decoration:none; }
+    .brand-card-meta { display:flex; gap:20px; }
+    .brand-stat-val { font-size:22px; font-weight:700; color:var(--gold); }
+    .brand-stat-lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; }
+    .brand-card-footer { padding-top:10px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .scan-meta { font-size:11px; color:var(--text-muted); flex:1; }
+    .scan-progress { font-size:11px; color:var(--gold); animation:pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .btn-scan { padding:4px 12px; font-size:11px; background:rgba(242,196,0,0.1); border:1px solid var(--gold); color:var(--gold); border-radius:4px; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+    .btn-scan:hover { background:rgba(242,196,0,0.2); }
+    .btn-scan:disabled { opacity:0.4; cursor:default; }
+    .no-data { font-size:10px; background:var(--surface-2); color:var(--text-muted); padding:2px 7px; border-radius:10px; }
+    .cov-bar { height:5px; background:var(--surface-2); border-radius:3px; margin-top:4px; overflow:hidden; }
+    .cov-fill { height:100%; background:var(--gold); border-radius:3px; }
+    .cov-label { font-size:10px; color:var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_tracker.config_view') }}" class="btn btn-sm btn-secondary">Config</a>
+<button class="btn btn-sm btn-primary" onclick="scanAllAssets()">Scan All</button>
+{% endblock %}
+
+{% block content %}
+<div class="brand-grid">
+{% for brand in brands %}
+<div class="brand-card" id="card-{{ brand.code }}">
+    <div class="brand-card-header">
+        {% if brand.sku_count > 0 %}
+        <a href="{{ url_for('content_tracker.brand_view', brand_code=brand.code) }}#imagery" class="brand-card-name">{{ brand.name }}</a>
+        {% else %}
+        <span class="brand-card-name">{{ brand.name }}</span>
+        {% endif %}
+        {% if brand.sku_count == 0 %}<span class="no-data">No data</span>{% endif %}
+    </div>
+
+    <div class="brand-card-meta">
+        <div>
+            <div class="brand-stat-val">{{ brand.model_count }}</div>
+            <div class="brand-stat-lbl">Models</div>
+        </div>
+        <div>
+            <div class="brand-stat-val">{{ brand.sku_count }}</div>
+            <div class="brand-stat-lbl">Sales Codes</div>
+        </div>
+        {% if brand.cutout1_pct is not none %}
+        <div>
+            <div class="brand-stat-val">{{ brand.cutout1_pct }}%</div>
+            <div class="brand-stat-lbl">Cutout 1</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if brand.cutout1_pct is not none %}
+    <div>
+        <div class="cov-bar"><div class="cov-fill" style="width:{{ brand.cutout1_pct }}%"></div></div>
+    </div>
+    {% endif %}
+
+    <div class="brand-card-footer">
+        <span class="scan-meta" id="ameta-{{ brand.code }}">
+            {% if brand.assets_scanning %}
+            <span class="scan-progress" id="aprog-{{ brand.code }}">{{ brand.assets_phase or 'Scanning…' }}</span>
+            {% elif brand.last_assets_scan %}
+            Last scanned {{ brand.last_assets_scan }}
+            {% else %}
+            Never scanned
+            {% endif %}
+        </span>
+        <button class="btn-scan" id="abtn-{{ brand.code }}"
+            onclick="startScan('{{ brand.code }}')"
+            {% if brand.assets_scanning %}disabled{% endif %}>
+            {% if brand.assets_scanning %}…{% else %}Scan{% endif %}
+        </button>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BASE = '/content-tracker';
+
+function setProgress(brand, text) {
+    let el = document.getElementById('aprog-' + brand);
+    if (el) {
+        el.textContent = text;
+    } else {
+        const meta = document.getElementById('ameta-' + brand);
+        if (meta) meta.innerHTML = `<span class="scan-progress" id="aprog-${brand}">${text}</span>`;
+    }
+}
+
+async function startScan(brand) {
+    const btn = document.getElementById('abtn-' + brand);
+    btn.disabled = true; btn.textContent = '…';
+    setProgress(brand, 'Starting…');
+
+    const r = await fetch(`${BASE}/api/scan/assets`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({brand}),
+    });
+    if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        setProgress(brand, 'Error: ' + (e.error || r.statusText));
+        btn.disabled = false; btn.textContent = 'Retry';
+        return;
+    }
+    pollScan(brand);
+}
+
+function pollScan(brand) {
+    const iv = setInterval(async () => {
+        const s   = await fetch(`${BASE}/api/scan/status?brand=${brand}`).then(r => r.json());
+        const sub = s.assets || {};
+        setProgress(brand, sub.phase || 'Running…');
+        if (sub.status === 'complete') {
+            clearInterval(iv);
+            setTimeout(() => location.reload(), 800);
+        }
+        if (sub.status === 'failed') {
+            clearInterval(iv);
+            setProgress(brand, '✗ ' + (sub.error || 'Failed'));
+            const btn = document.getElementById('abtn-' + brand);
+            if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+        }
+    }, 2000);
+}
+
+async function scanAllAssets() {
+    const brands = {{ brands | map(attribute='code') | list | tojson }};
+    for (const b of brands) {
+        startScan(b);
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
+{% for brand in brands %}
+{% if brand.assets_scanning %}pollScan('{{ brand.code }}');{% endif %}
+{% endfor %}
+</script>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Content Tracker — Roxor Content HUB{% endblock %}
+{% block page_title %}Roxor Content Tracker{% endblock %}
+{% block page_subtitle %}Asset and content coverage by brand, organised by product model{% endblock %}
+
+{% block head %}
+<style>
+    .tracker-layout { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+    .tracker-panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .tracker-panel-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .tracker-panel-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--gold); }
+    .tracker-panel-desc { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .brand-row { display:flex; align-items:center; padding:12px 20px; border-bottom:1px solid var(--border); gap:12px; }
+    .brand-row:last-child { border-bottom:none; }
+    .brand-row:hover { background:rgba(242,196,0,0.04); }
+    .brand-name { font-size:13px; font-weight:600; color:var(--text); text-decoration:none; min-width:110px; }
+    .brand-name.no-link { color:var(--text-muted); }
+    .brand-counts { display:flex; gap:16px; min-width:100px; }
+    .brand-stat { text-align:center; }
+    .brand-stat-val { font-size:16px; font-weight:700; color:var(--gold); line-height:1; }
+    .brand-stat-lbl { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
+    .scan-info { flex:1; font-size:11px; color:var(--text-muted); }
+    .scan-progress { color:var(--gold); animation:pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .btn-scan { padding:4px 14px; font-size:11px; background:rgba(242,196,0,0.1); border:1px solid var(--gold); color:var(--gold); border-radius:4px; cursor:pointer; transition:all 0.15s; white-space:nowrap; flex-shrink:0; }
+    .btn-scan:hover { background:rgba(242,196,0,0.2); }
+    .btn-scan:disabled { opacity:0.4; cursor:default; }
+    .no-data-badge { font-size:10px; background:var(--surface-2); color:var(--text-muted); padding:2px 7px; border-radius:10px; }
+    .panel-scan-all { padding:3px 10px; font-size:11px; background:rgba(242,196,0,0.08); border:1px solid rgba(242,196,0,0.3); color:var(--gold); border-radius:4px; cursor:pointer; white-space:nowrap; }
+    .panel-scan-all:hover { background:rgba(242,196,0,0.15); }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" onclick="scanAll('assets'); scanAll('content');">Scan All</button>
+{% endblock %}
+
+{% block content %}
+<div class="tracker-layout">
+
+    <!-- ── IMAGERY PANEL ─────────────────────────────────────────────────── -->
+    <div class="tracker-panel">
+        <div class="tracker-panel-header">
+            <div>
+                <div class="tracker-panel-title">Imagery</div>
+                <div class="tracker-panel-desc">Asset family coverage per brand</div>
+            </div>
+            <button class="panel-scan-all" onclick="scanAll('assets')">Scan All</button>
+        </div>
+
+        {% for brand in brands %}
+        <div class="brand-row">
+            {% if brand.sku_count > 0 %}
+            <a href="{{ url_for('content_tracker.brand_view', brand_code=brand.code) }}#imagery" class="brand-name">{{ brand.name }}</a>
+            {% else %}
+            <span class="brand-name no-link">{{ brand.name }}</span>
+            {% endif %}
+
+            <div class="brand-counts">
+                <div class="brand-stat">
+                    <div class="brand-stat-val">{{ brand.model_count }}</div>
+                    <div class="brand-stat-lbl">Models</div>
+                </div>
+                <div class="brand-stat">
+                    <div class="brand-stat-val">{{ brand.sku_count }}</div>
+                    <div class="brand-stat-lbl">SKUs</div>
+                </div>
+            </div>
+
+            <div class="scan-info" id="ameta-{{ brand.code }}">
+                {% if brand.assets_scanning %}
+                <span class="scan-progress" id="aprog-{{ brand.code }}">{{ brand.assets_phase or 'Scanning…' }}</span>
+                {% elif brand.sku_count == 0 %}
+                <span class="no-data-badge">No data</span>
+                {% elif brand.last_assets_scan %}
+                Last scanned {{ brand.last_assets_scan }}
+                {% else %}
+                Never scanned
+                {% endif %}
+            </div>
+
+            <button class="btn-scan" id="abtn-{{ brand.code }}"
+                onclick="startScan('{{ brand.code }}', 'assets')"
+                {% if brand.assets_scanning %}disabled{% endif %}>
+                {% if brand.assets_scanning %}…{% else %}Scan{% endif %}
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- ── CONTENT PANEL ─────────────────────────────────────────────────── -->
+    <div class="tracker-panel">
+        <div class="tracker-panel-header">
+            <div>
+                <div class="tracker-panel-title">Content</div>
+                <div class="tracker-panel-desc">Attribute coverage per scope per brand</div>
+            </div>
+            <button class="panel-scan-all" onclick="scanAll('content')">Scan All</button>
+        </div>
+
+        {% for brand in brands %}
+        <div class="brand-row">
+            {% if brand.sku_count > 0 %}
+            <a href="{{ url_for('content_tracker.brand_view', brand_code=brand.code) }}#content" class="brand-name">{{ brand.name }}</a>
+            {% else %}
+            <span class="brand-name no-link">{{ brand.name }}</span>
+            {% endif %}
+
+            <div class="brand-counts">
+                <div class="brand-stat">
+                    <div class="brand-stat-val">{{ brand.model_count }}</div>
+                    <div class="brand-stat-lbl">Models</div>
+                </div>
+                <div class="brand-stat">
+                    <div class="brand-stat-val">{{ brand.sku_count }}</div>
+                    <div class="brand-stat-lbl">SKUs</div>
+                </div>
+            </div>
+
+            <div class="scan-info" id="cmeta-{{ brand.code }}">
+                {% if brand.content_scanning %}
+                <span class="scan-progress" id="cprog-{{ brand.code }}">{{ brand.content_phase or 'Scanning…' }}</span>
+                {% elif brand.sku_count == 0 %}
+                <span class="no-data-badge">No data</span>
+                {% elif brand.last_content_scan %}
+                Last scanned {{ brand.last_content_scan }}
+                {% else %}
+                Never scanned
+                {% endif %}
+            </div>
+
+            <button class="btn-scan" id="cbtn-{{ brand.code }}"
+                onclick="startScan('{{ brand.code }}', 'content')"
+                {% if brand.content_scanning %}disabled{% endif %}>
+                {% if brand.content_scanning %}…{% else %}Scan{% endif %}
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const BASE = '/content-tracker';
+
+function setProgress(brand, type, text) {
+    const prefix = type === 'assets' ? 'a' : 'c';
+    let el = document.getElementById(prefix + 'prog-' + brand);
+    if (el) {
+        el.textContent = text;
+    } else {
+        const meta = document.getElementById(prefix + 'meta-' + brand);
+        if (meta) meta.innerHTML = `<span class="scan-progress" id="${prefix}prog-${brand}">${text}</span>`;
+    }
+}
+
+async function startScan(brand, type) {
+    const prefix = type === 'assets' ? 'a' : 'c';
+    const btn = document.getElementById(prefix + 'btn-' + brand);
+    btn.disabled = true; btn.textContent = '…';
+    setProgress(brand, type, 'Starting…');
+
+    const r = await fetch(`${BASE}/api/scan/${type}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({brand}),
+    });
+    if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        setProgress(brand, type, 'Error: ' + (e.error || r.statusText));
+        btn.disabled = false; btn.textContent = 'Retry';
+        return;
+    }
+    pollScan(brand, type);
+}
+
+function pollScan(brand, type) {
+    const prefix = type === 'assets' ? 'a' : 'c';
+    const iv = setInterval(async () => {
+        const s = await fetch(`${BASE}/api/scan/status?brand=${brand}`).then(r => r.json());
+        const sub = s[type] || {};
+        setProgress(brand, type, sub.phase || 'Running…');
+        if (sub.status === 'complete') {
+            clearInterval(iv);
+            setTimeout(() => location.reload(), 800);
+        }
+        if (sub.status === 'failed') {
+            clearInterval(iv);
+            setProgress(brand, type, '✗ ' + (sub.error || 'Failed'));
+            const btn = document.getElementById(prefix + 'btn-' + brand);
+            if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
+        }
+    }, 2000);
+}
+
+async function scanAll(type) {
+    const brands = {{ brands | map(attribute='code') | list | tojson }};
+    for (const b of brands) {
+        startScan(b, type);
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
+// Resume polling for any in-progress scans on page load
+{% for brand in brands %}
+{% if brand.assets_scanning %}pollScan('{{ brand.code }}', 'assets');{% endif %}
+{% if brand.content_scanning %}pollScan('{{ brand.code }}', 'content');{% endif %}
+{% endfor %}
+</script>
+{% endblock %}

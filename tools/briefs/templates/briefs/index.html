@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}Lifestyle Briefs{% endblock %}
+{% block page_title %}Lifestyle Briefs{% endblock %}
+{% block page_subtitle %}Manage lifestyle photography briefs{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('briefs.generate') }}" class="btn btn-primary">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+    New Brief
+</a>
+<a href="{{ url_for('briefs.uploads_page') }}" class="btn btn-secondary">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" width="14" height="14"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+    Uploads{% if pending_uploads %} ({{ pending_uploads }}){% endif %}
+</a>
+{% if current_user.role == 'admin' %}
+<a href="{{ url_for('briefs.uploads_review') }}" class="btn btn-secondary">Review Queue{% if pending_uploads %} <span style="background:var(--danger);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;">{{ pending_uploads }}</span>{% endif %}</a>
+<a href="{{ url_for('briefs.model_mappings_view') }}" class="btn btn-secondary">Model Mappings</a>
+<a href="{{ url_for('briefs.scene_catalog') }}" class="btn btn-secondary">Scenes</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+.priority-badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; }
+.priority-urgent { background:rgba(239,68,68,.15); color:var(--danger); }
+.priority-high   { background:rgba(245,158,11,.15); color:var(--warning); }
+.priority-normal { background:rgba(34,197,94,.12);  color:var(--success); }
+.priority-low    { background:rgba(100,116,139,.15); color:var(--text-muted); }
+.status-pill { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
+.st-pending    { background:rgba(100,116,139,.2); color:var(--text-muted); }
+.st-assigned   { background:rgba(245,158,11,.15); color:var(--warning); }
+.st-in-progress{ background:rgba(59,130,246,.15);  color:#60a5fa; }
+.st-complete   { background:rgba(34,197,94,.15);   color:var(--success); }
+th { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--text-muted); padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; }
+td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
+tr:hover td { background:rgba(255,255,255,.02); }
+.deadline-overdue { color:var(--danger) !important; font-weight:600; }
+.deadline-soon    { color:var(--warning) !important; font-weight:600; }
+</style>
+
+{% if current_user.role == 'admin' %}
+<!-- Admin view: tabbed brief table -->
+<div style="display:flex; gap:16px; margin-bottom:20px;">
+    <div class="card" style="flex:1; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--warning);">{{ new_briefs|length }}</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Pending / Assigned</div>
+    </div>
+    <div class="card" style="flex:1; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:#60a5fa;">{{ in_progress|length }}</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">In Progress</div>
+    </div>
+    <div class="card" style="flex:1; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--success);">{{ complete|length }}</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Complete</div>
+    </div>
+    <div class="card" style="flex:1; text-align:center;">
+        <div style="font-size:1.8rem; font-weight:700; color:var(--danger);">{{ pending_uploads }}</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Pending Uploads</div>
+    </div>
+</div>
+
+{% macro brief_table(briefs, label) %}
+{% if briefs %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+        <span class="card-title">{{ label }} <span style="color:var(--text-muted); font-weight:400;">({{ briefs|length }})</span></span>
+        {% if label == 'Pending / Assigned' %}
+        <form method="post" action="{{ url_for('briefs.scan_completions') }}" style="display:inline;">
+            <button type="submit" class="btn btn-secondary btn-sm">Scan Completions</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>Priority</th><th>Name</th><th>Type</th><th>SKUs</th><th>Scenes</th>
+                <th>Status</th><th>Deadline</th><th>Created</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+            {% for b in briefs %}
+            <tr>
+                <td>
+                    <form method="post" action="{{ url_for('briefs.update_brief_priority', brief_id=b.id) }}">
+                        <select name="priority" class="form-control" style="padding:3px 6px;font-size:11px;" onchange="this.form.submit()">
+                            {% for p in ['low','normal','high','urgent'] %}
+                            <option value="{{ p }}" {% if (b.priority or 'normal') == p %}selected{% endif %}>{{ p.title() }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td><strong>{{ b.name }}</strong>{% if b.is_maam %} <span style="font-size:10px;color:var(--text-muted);">[MAAM]</span>{% endif %}</td>
+                <td style="color:var(--text-muted);">{{ (b.brief_type or 'lifestyle').title() }}</td>
+                <td>{{ b.sku_count }}</td>
+                <td>{{ b.scene_count or 3 }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('briefs.update_brief_status', brief_id=b.id) }}">
+                        <select name="status" class="form-control" style="padding:3px 6px;font-size:11px;" onchange="this.form.submit()">
+                            {% for s in ['pending','assigned','in_progress','complete'] %}
+                            <option value="{{ s }}" {% if (b.status or 'pending') == s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td>
+                    {% if b.deadline %}
+                    <span class="{% if b.deadline < today %}deadline-overdue{% elif b.deadline <= soon %}deadline-soon{% endif %}">{{ b.deadline }}</span>
+                    {% else %}-{% endif %}
+                </td>
+                <td style="color:var(--text-muted);font-size:12px;">{{ b.created_at[:10] if b.created_at else '-' }}</td>
+                <td>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <a href="{{ url_for('briefs.download_all', brief_id=b.id) }}" class="btn btn-secondary btn-sm">Download</a>
+                        <a href="{{ url_for('briefs.view_brief', brief_id=b.id) }}" class="btn btn-secondary btn-sm">View</a>
+                        {% if b.status == 'complete' %}
+                        <button class="btn btn-secondary btn-sm" onclick="sendBack({{ b.id }}, '{{ b.name|replace("'","\\'")|e }}')">Send Back</button>
+                        {% endif %}
+                        <form method="post" action="{{ url_for('briefs.delete_brief', brief_id=b.id) }}" onsubmit="return confirm('Delete {{ b.name|replace("'","\\'")|e }}?');" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm">Del</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{{ brief_table(new_briefs, 'Pending / Assigned') }}
+{{ brief_table(in_progress, 'In Progress') }}
+{{ brief_table(complete, 'Complete') }}
+
+{% else %}
+<!-- User view -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">My Briefs</span>
+        <a href="{{ url_for('briefs.generate') }}" class="btn btn-primary btn-sm">New Brief</a>
+    </div>
+    {% if briefs %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Name</th><th>SKUs</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for b in briefs %}
+            <tr>
+                <td><strong>{{ b.name }}</strong></td>
+                <td>{{ b.sku_count }}</td>
+                <td><span class="status-pill st-{{ (b.status or 'pending').replace('_','-') }}">{{ (b.status or 'pending').replace('_',' ').title() }}</span></td>
+                <td style="color:var(--text-muted);font-size:12px;">{{ b.created_at[:10] if b.created_at else '-' }}</td>
+                <td>
+                    <a href="{{ url_for('briefs.download_all', brief_id=b.id) }}" class="btn btn-secondary btn-sm">Download</a>
+                    <a href="{{ url_for('briefs.view_brief', brief_id=b.id) }}" class="btn btn-secondary btn-sm">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color:var(--text-muted); padding:20px 0;">No briefs yet. <a href="{{ url_for('briefs.generate') }}">Create your first brief</a></p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Send Back Modal -->
+<div id="sendBackModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:440px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Send Brief Back</span></div>
+        <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">Brief: <strong id="sbBriefName"></strong></p>
+        <div class="form-group">
+            <label class="form-label">Reason (optional)</label>
+            <textarea id="sbReason" class="form-control" rows="3" placeholder="Describe what needs changing..."></textarea>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('sendBackModal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmSendBack()">Send Back</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let sbBriefId = null;
+function sendBack(id, name) {
+    sbBriefId = id;
+    document.getElementById('sbBriefName').textContent = name;
+    document.getElementById('sbReason').value = '';
+    const m = document.getElementById('sendBackModal');
+    m.style.display = 'flex';
+}
+function confirmSendBack() {
+    const reason = document.getElementById('sbReason').value;
+    fetch(`/briefs/api/send-back-brief/${sbBriefId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason})
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error || 'Failed');
+    });
+}
+</script>
+{% endblock %}

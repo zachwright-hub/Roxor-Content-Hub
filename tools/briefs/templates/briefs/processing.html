@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Processing Brief{% endblock %}
+{% block page_title %}Generating Brief{% endblock %}
+{% block page_subtitle %}{{ brief_name }} — {{ sku_count }} SKUs{% endblock %}
+
+{% block content %}
+<div style="max-width:540px; margin:60px auto; text-align:center;">
+    <div class="card" style="padding:48px;">
+        <div id="spinner" style="width:56px; height:56px; border:3px solid var(--border); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 32px;"></div>
+        <h2 style="font-size:1.2rem; margin-bottom:8px;">Generating brief…</h2>
+        <p style="color:var(--text-muted); font-size:13px; margin-bottom:32px;">Fetching Akeneo data, matching 3D models, building Excel spreadsheet and downloading cutouts. This may take a minute.</p>
+        <div id="progressBar" style="height:6px; background:var(--surface-2); border-radius:3px; margin-bottom:12px; overflow:hidden;">
+            <div id="progressFill" style="height:100%; width:0%; background:var(--gold); transition:width .3s;"></div>
+        </div>
+        <div id="statusText" style="font-size:13px; color:var(--text-muted);">Starting…</div>
+    </div>
+    <div id="resultBox" style="display:none; margin-top:24px;" class="card">
+        <div id="resultContent"></div>
+    </div>
+</div>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async function() {
+    try {
+        document.getElementById('progressFill').style.width = '20%';
+        document.getElementById('statusText').textContent = 'Fetching Akeneo product data…';
+
+        const resp = await fetch('/briefs/api/process', { method: 'POST' });
+
+        document.getElementById('progressFill').style.width = '80%';
+        document.getElementById('statusText').textContent = 'Generating Excel spreadsheet…';
+
+        const data = await resp.json();
+
+        document.getElementById('progressFill').style.width = '100%';
+        document.getElementById('spinner').style.display = 'none';
+
+        if (data.error) {
+            document.getElementById('statusText').textContent = 'Error: ' + data.error;
+            document.getElementById('statusText').style.color = 'var(--danger)';
+            return;
+        }
+
+        document.getElementById('statusText').textContent = 'Done!';
+        document.getElementById('statusText').style.color = 'var(--success)';
+
+        const resultBox = document.getElementById('resultBox');
+        resultBox.style.display = 'block';
+        document.getElementById('resultContent').innerHTML = `
+            <h3 style="font-size:1rem; margin-bottom:16px; color:var(--success);">✓ Brief Generated</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; text-align:left;">
+                <div><div style="font-size:11px; color:var(--text-muted);">SKUs included</div><strong>${data.sku_count}</strong></div>
+                <div><div style="font-size:11px; color:var(--text-muted);">3D Models found</div><strong style="color:var(--success);">${data.models_found}</strong></div>
+                <div><div style="font-size:11px; color:var(--text-muted);">Models missing</div><strong style="color:${data.models_missing > 0 ? 'var(--warning)' : 'var(--text-muted)'};">${data.models_missing}</strong></div>
+                <div><div style="font-size:11px; color:var(--text-muted);">SKUs excluded</div><strong>${(data.excluded_skus || []).length}</strong></div>
+            </div>
+            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+                <a href="/briefs/download-all/${data.brief_id}" class="btn btn-primary">Download Brief</a>
+                <a href="/briefs/" class="btn btn-secondary">Back to Dashboard</a>
+                ${(data.excluded_skus || []).length > 0 ? `<a href="/briefs/download-excluded/${data.brief_id}" class="btn btn-secondary">Download Excluded SKUs</a>` : ''}
+            </div>
+        `;
+    } catch(e) {
+        document.getElementById('statusText').textContent = 'Network error: ' + e.message;
+        document.getElementById('statusText').style.color = 'var(--danger)';
+        document.getElementById('spinner').style.display = 'none';
+    }
+})();
+</script>
+{% endblock %}

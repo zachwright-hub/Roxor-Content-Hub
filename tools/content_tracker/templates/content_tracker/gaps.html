@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}{{ brand_name }} Gaps — Content Tracker{% endblock %}
+{% block page_title %}{{ brand_name }} — Gaps{% endblock %}
+{% block page_subtitle %}Missing assets and content attributes{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_tracker.brand_view', brand_code=brand_code) }}" class="btn btn-sm btn-secondary">← {{ brand_name }}</a>
+{% endblock %}
+
+{% block head %}
+<style>
+    .tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--border); }
+    .tab-btn { padding:8px 20px; background:none; border:none; border-bottom:3px solid transparent; color:var(--text-muted); font-size:13px; font-weight:600; cursor:pointer; margin-bottom:-2px; transition:all 0.15s; }
+    .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+    .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+    .filters select { padding:6px 10px; background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:12px; }
+    .filters select:focus { outline:none; border-color:var(--gold); }
+    .filter-input { padding:6px 12px; background:var(--surface); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:12px; width:200px; }
+    .filter-input:focus { outline:none; border-color:var(--gold); }
+    .gap-count { font-size:12px; color:var(--text-muted); margin-left:auto; }
+    .gaps-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .gaps-table th { text-align:left; padding:8px 10px; border-bottom:2px solid var(--border); color:var(--text-muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+    .gaps-table td { padding:7px 10px; border-bottom:1px solid var(--border); }
+    .gaps-table tr:hover td { background:var(--surface-2); }
+    .gaps-table td:first-child { font-family:monospace; font-size:11px; font-weight:600; }
+    .btn-export { padding:6px 14px; background:rgba(242,196,0,0.1); border:1px solid var(--gold); color:var(--gold); border-radius:5px; font-size:12px; text-decoration:none; cursor:pointer; }
+    .btn-export:hover { background:rgba(242,196,0,0.2); }
+    .empty-state { text-align:center; padding:48px; color:var(--text-muted); }
+    .empty-state .icon { font-size:36px; margin-bottom:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tabs">
+    <button class="tab-btn active" onclick="showTab('content-gaps', this)">
+        Content Gaps
+        <span style="margin-left:6px;background:rgba(229,57,53,0.15);color:#e53935;padding:1px 7px;border-radius:10px;font-size:10px;">{{ content_gaps | length }}</span>
+    </button>
+    <button class="tab-btn" onclick="showTab('asset-gaps', this)">
+        Asset Gaps
+        <span style="margin-left:6px;background:rgba(229,57,53,0.15);color:#e53935;padding:1px 7px;border-radius:10px;font-size:10px;">{{ asset_gaps | length }}</span>
+    </button>
+</div>
+
+<!-- ── CONTENT GAPS ────────────────────────────────────────────────────── -->
+<div class="tab-pane active" id="tab-content-gaps">
+    <div class="filters">
+        <input class="filter-input" type="text" id="cgSearch" placeholder="Search SKU or model…" oninput="filterGaps('cg')">
+        <select id="cgCategory" onchange="filterGaps('cg')">
+            <option value="">All categories</option>
+            {% for c in content_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        <select id="cgScope" onchange="filterGaps('cg')">
+            <option value="">All scopes</option>
+            {% for s in content_scopes %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+        <span class="gap-count" id="cgCount">{{ content_gaps | length }} gaps</span>
+        <a href="{{ url_for('content_tracker.export_content_gaps', brand_code=brand_code) }}" class="btn-export">Export CSV</a>
+    </div>
+
+    {% if not content_gaps %}
+    <div class="empty-state">
+        <div class="icon">✓</div>
+        <div>No content gaps — all required attributes are filled for this brand.</div>
+    </div>
+    {% else %}
+    <div style="overflow-x:auto;">
+    <table class="gaps-table" id="cgTable">
+        <thead>
+            <tr>
+                <th>Sales Code</th>
+                <th>Model</th>
+                <th>Category</th>
+                <th>Scope</th>
+                <th>Attribute</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for g in content_gaps %}
+        <tr class="cg-row"
+            data-sku="{{ g.sku | lower }}"
+            data-model="{{ g.model | lower }}"
+            data-cat="{{ g.category }}"
+            data-scope="{{ g.scope }}">
+            <td>{{ g.sku }}</td>
+            <td style="color:var(--text-muted)">{{ g.model }}</td>
+            <td style="color:var(--text-muted)">{{ g.category }}</td>
+            <td>{{ g.scope }}</td>
+            <td style="color:var(--gold)">{{ g.attribute }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── ASSET GAPS ──────────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-asset-gaps">
+    <div class="filters">
+        <input class="filter-input" type="text" id="agSearch" placeholder="Search SKU or model…" oninput="filterGaps('ag')">
+        <select id="agCategory" onchange="filterGaps('ag')">
+            <option value="">All categories</option>
+            {% for c in asset_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        <select id="agFamily" onchange="filterGaps('ag')">
+            <option value="">All families</option>
+            {% for f in asset_families_present %}<option value="{{ f }}">{{ asset_labels.get(f, f) }}</option>{% endfor %}
+        </select>
+        <span class="gap-count" id="agCount">{{ asset_gaps | length }} gaps</span>
+        <a href="{{ url_for('content_tracker.export_asset_gaps', brand_code=brand_code) }}" class="btn-export">Export CSV</a>
+    </div>
+
+    {% if not asset_gaps %}
+    <div class="empty-state">
+        {% if not asset_gaps %}
+        <div class="icon">{% if not asset_families_present %}⚠{% else %}✓{% endif %}</div>
+        <div>{% if not asset_families_present %}No asset scan data yet — run an asset scan first.{% else %}No asset gaps — all checked asset families are present.{% endif %}</div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div style="overflow-x:auto;">
+    <table class="gaps-table" id="agTable">
+        <thead>
+            <tr>
+                <th>Sales Code</th>
+                <th>Model</th>
+                <th>Category</th>
+                <th>Asset Family</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for g in asset_gaps %}
+        <tr class="ag-row"
+            data-sku="{{ g.sku | lower }}"
+            data-model="{{ g.model | lower }}"
+            data-cat="{{ g.category }}"
+            data-family="{{ g.asset_family }}">
+            <td>{{ g.sku }}</td>
+            <td style="color:var(--text-muted)">{{ g.model }}</td>
+            <td style="color:var(--text-muted)">{{ g.category }}</td>
+            <td style="color:#e53935">{{ asset_labels.get(g.asset_family, g.asset_family) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+
+function filterGaps(prefix) {
+    const search   = document.getElementById(prefix + 'Search')?.value.toLowerCase()   || '';
+    const catSel   = document.getElementById(prefix + 'Category')?.value               || '';
+    const scopeSel = document.getElementById(prefix + 'Scope')?.value                  || '';
+    const famSel   = document.getElementById(prefix + 'Family')?.value                 || '';
+    const rows     = document.querySelectorAll('.' + prefix + '-row');
+
+    let visible = 0;
+    rows.forEach(row => {
+        const sku     = row.dataset.sku   || '';
+        const model   = row.dataset.model || '';
+        const cat     = row.dataset.cat   || '';
+        const scope   = row.dataset.scope || '';
+        const family  = row.dataset.family || '';
+
+        const show = (!search   || sku.includes(search)   || model.includes(search))
+                  && (!catSel   || cat   === catSel)
+                  && (!scopeSel || scope === scopeSel)
+                  && (!famSel   || family === famSel);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    const countEl = document.getElementById(prefix + 'Count');
+    if (countEl) countEl.textContent = visible + ' gap' + (visible !== 1 ? 's' : '');
+}
+</script>
+{% endblock %}

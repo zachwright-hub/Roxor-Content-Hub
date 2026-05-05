@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}View Brief — {{ brief.name }}{% endblock %}
+{% block page_title %}{{ brief.name }}{% endblock %}
+{% block page_subtitle %}{{ brief.sku_count }} SKUs · {{ (brief.brief_type or 'lifestyle').title() }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('briefs.download_all', brief_id=brief.id) }}" class="btn btn-primary">Download ZIP</a>
+<a href="{{ url_for('briefs.index') }}" class="btn btn-secondary">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+    <div class="card" style="text-align:center;">
+        <div style="font-size:1.6rem; font-weight:700;">{{ brief.sku_count }}</div>
+        <div style="font-size:12px; color:var(--text-muted);">Total SKUs</div>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div style="font-size:1.6rem; font-weight:700; color:var(--success);">{{ models_with }}</div>
+        <div style="font-size:12px; color:var(--text-muted);">With 3D Model</div>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div style="font-size:1.6rem; font-weight:700; color:var(--warning);">{{ models_without }}</div>
+        <div style="font-size:12px; color:var(--text-muted);">Without 3D Model</div>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div style="font-size:1.6rem; font-weight:700;">{{ brief.scene_count or 3 }}</div>
+        <div style="font-size:12px; color:var(--text-muted);">Scenes per SKU</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><span class="card-title">Brief Info</span></div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; font-size:13px;">
+        <div><span style="color:var(--text-muted);">Status</span><br><strong>{{ (brief.status or 'pending').replace('_',' ').title() }}</strong></div>
+        <div><span style="color:var(--text-muted);">Priority</span><br><strong>{{ (brief.priority or 'normal').title() }}</strong></div>
+        <div><span style="color:var(--text-muted);">Scene Mode</span><br><strong>{{ (brief.scene_mode or 'new').title() }}</strong></div>
+        <div><span style="color:var(--text-muted);">Vibe</span><br><strong>{{ brief.scene_vibe or '—' }}</strong></div>
+        <div><span style="color:var(--text-muted);">Deadline</span><br><strong>{{ brief.deadline or '—' }}</strong></div>
+        <div><span style="color:var(--text-muted);">Created</span><br><strong>{{ brief.created_at[:10] if brief.created_at else '—' }}</strong></div>
+    </div>
+</div>
+
+{% if rows %}
+<div class="card">
+    <div class="card-header"><span class="card-title">SKU List ({{ rows|length }})</span></div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>SKU</th><th>Title</th><th>Colour</th><th>Category</th>
+                <th>ls1</th><th>ls2</th><th>ls3</th>
+                <th>Models</th><th>Scene Count</th>
+            </tr></thead>
+            <tbody>
+            {% for r in rows %}
+            <tr {% if not r.models %}style="background:rgba(239,68,68,.04);"{% endif %}>
+                <td><strong>{{ r.sku }}</strong></td>
+                <td style="font-size:12px;">{{ r.title or '—' }}</td>
+                <td style="font-size:12px; color:var(--text-muted);">{{ r.colour or '—' }}</td>
+                <td style="font-size:12px; color:var(--text-muted);">{{ r.category or '—' }}</td>
+                <td style="font-size:11px; color:var(--text-muted);">{{ r.ls1_file or '—' }}</td>
+                <td style="font-size:11px; color:var(--text-muted);">{{ r.ls2_file or '—' }}</td>
+                <td style="font-size:11px; color:var(--text-muted);">{{ r.ls3_file or '—' }}</td>
+                <td style="font-size:12px;">
+                    {% if r.models %}
+                    <span style="color:var(--success);">✓ {{ r.models[:40] }}{% if r.models|length > 40 %}…{% endif %}</span>
+                    {% else %}
+                    <span style="color:var(--danger);">✗ No model</span>
+                    {% endif %}
+                </td>
+                <td>{{ r.scene_count or '3' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <p style="color:var(--text-muted); padding:20px 0;">No Excel file found for this brief (may have been moved or deleted).</p>
+</div>
+{% endif %}
+{% endblock %}

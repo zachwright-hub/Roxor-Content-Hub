@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ model_code }} — Content Tracker{% endblock %}
+{% block page_title %}{{ model_code }}{% endblock %}
+{% block page_subtitle %}{{ brand_name }} · {{ total }} sales code{{ 's' if total != 1 else '' }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_tracker.brand_view', brand_code=brand_code) }}" class="btn btn-sm btn-secondary">← {{ brand_name }}</a>
+{% endblock %}
+
+{% block head %}
+<style>
+    .summary-cards { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+    .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px 16px; min-width:100px; }
+    .summary-card-label { font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+    .summary-card-val { font-size:20px; font-weight:700; }
+    .tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:1px solid var(--border); }
+    .tab-btn { padding:7px 16px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:13px; font-weight:500; cursor:pointer; margin-bottom:-1px; transition:all 0.15s; }
+    .tab-btn.active { color:var(--gold); border-bottom-color:var(--gold); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+    .coverage-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .coverage-table th { text-align:center; padding:7px 8px; border-bottom:1px solid var(--border); color:var(--text-muted); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; }
+    .coverage-table th.left { text-align:left; }
+    .coverage-table td { padding:7px 8px; border-bottom:1px solid var(--border); text-align:center; vertical-align:middle; }
+    .coverage-table td.sku-cell { text-align:left; font-family:monospace; font-weight:600; color:var(--text); font-size:12px; }
+    .coverage-table tr:hover td { background:var(--surface-2); }
+    .tick { color:#4caf50; }
+    .cross { color:#e53935; opacity:0.7; }
+    .dash { color:var(--text-muted); opacity:0.3; }
+    .scope-header { background:var(--surface-2); text-align:left !important; padding:10px 8px 6px !important; color:var(--gold) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:0.06em; border-top:2px solid var(--border) !important; }
+    .no-config { text-align:center; padding:40px; color:var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Summary cards -->
+<div class="summary-cards">
+    {% for fam in active_families %}
+    {% set has = fam_totals.get(fam, 0) %}
+    {% set pct = ((has / total) * 100) | int if total else 0 %}
+    <div class="summary-card">
+        <div class="summary-card-label">{{ asset_labels.get(fam, fam) }}</div>
+        <div class="summary-card-val" style="color:{% if pct == 100 %}#4caf50{% elif pct == 0 %}#e53935{% else %}var(--gold){% endif %}">{{ pct }}%</div>
+        <div style="font-size:10px;color:var(--text-muted);">{{ has }}/{{ total }}</div>
+    </div>
+    {% endfor %}
+    {% if required_attrs %}
+    <div class="summary-card" style="border-color:var(--gold)">
+        <div class="summary-card-label">Content</div>
+        {% set pct = ((content_passed / content_total) * 100) | int if content_total else 0 %}
+        <div class="summary-card-val" style="color:{% if pct == 100 %}#4caf50{% elif pct == 0 %}#e53935{% else %}var(--gold){% endif %}">{{ pct }}%</div>
+        <div style="font-size:10px;color:var(--text-muted);">{{ content_passed }}/{{ content_total }} attrs</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab-btn active" onclick="showTab('assets', this)">Images</button>
+    {% if required_attrs %}
+    <button class="tab-btn" onclick="showTab('content', this)">Content</button>
+    {% endif %}
+</div>
+
+<!-- Images tab -->
+<div class="tab-pane active" id="tab-assets">
+<div style="overflow-x:auto;">
+<table class="coverage-table">
+    <thead>
+        <tr>
+            <th class="left">Sales Code</th>
+            {% for fam in active_families %}
+            <th>{{ asset_labels.get(fam, fam) }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    <tr style="background:var(--surface-2)">
+        <td class="sku-cell" style="color:var(--text-muted)">{{ total }} SKUs</td>
+        {% for fam in active_families %}
+        <td style="color:var(--text-muted);font-size:11px;">{{ fam_totals.get(fam,0) }}/{{ total }}</td>
+        {% endfor %}
+    </tr>
+    {% for sku in skus %}
+    <tr>
+        <td class="sku-cell">{{ sku.sku }}</td>
+        {% for fam in active_families %}
+        {% set present = sku.assets.get(fam) %}
+        <td>
+            {% if present %}<span class="tick">✓</span>
+            {% elif present is sameas false %}<span class="cross">✗</span>
+            {% else %}<span class="dash">—</span>{% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+
+<!-- Content tab -->
+{% if required_attrs %}
+<div class="tab-pane" id="tab-content">
+{% if not active_scopes %}
+<div class="no-config">No content data yet — run a scan first.</div>
+{% else %}
+<div style="overflow-x:auto;">
+<table class="coverage-table">
+    <thead>
+        <tr>
+            <th class="left">Sales Code</th>
+            {% for scope in active_scopes %}
+            {% for attr in required_attrs[scope] %}
+            <th title="{{ scope }} · {{ attr }}">{{ attr | replace('bullet_point_', 'BP') | replace('_', ' ') }}</th>
+            {% endfor %}
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for scope in active_scopes %}
+    <tr>
+        <td colspan="{{ total_cols }}" class="scope-header">{{ scope }}</td>
+    </tr>
+    {% for sku in skus %}
+    <tr>
+        <td class="sku-cell">{{ sku.sku }}</td>
+        {% for s in active_scopes %}
+        {% for attr in required_attrs[s] %}
+        {% set has = sku.content.get(s, {}).get(attr) %}
+        <td>
+            {% if has %}<span class="tick">✓</span>
+            {% else %}<span class="cross">✗</span>{% endif %}
+        </td>
+        {% endfor %}
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(name, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+</script>
+{% endblock %}

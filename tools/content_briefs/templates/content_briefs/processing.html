@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Generating Brief — Roxor Content HUB{% endblock %}
+{% block page_title %}Generating Brief{% endblock %}
+{% block page_subtitle %}Fetching data from Akeneo and building your spreadsheet{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:0 auto;text-align:center;padding:48px 0;">
+
+    <div id="state-loading">
+        <div style="width:56px;height:56px;border:4px solid var(--surface-2);
+                    border-top-color:var(--gold);border-radius:50%;
+                    animation:spin 0.9s linear infinite;margin:0 auto 24px;"></div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:8px;">
+            Building <em>{{ brief_name }}</em>
+        </div>
+        <div style="font-size:14px;color:var(--text-muted);">
+            Fetching {{ sku_count }} SKU{{ 's' if sku_count != 1 }} from Akeneo…
+        </div>
+    </div>
+
+    <div id="state-done" style="display:none;">
+        <div style="width:56px;height:56px;background:rgba(76,175,80,0.15);border-radius:50%;
+                    display:flex;align-items:center;justify-content:center;margin:0 auto 24px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 stroke-width="2.5" stroke="#4caf50" width="28" height="28">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+            </svg>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">Brief ready!</div>
+        <div id="done-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:24px;"></div>
+        <div id="done-actions" style="display:flex;gap:12px;justify-content:center;"></div>
+    </div>
+
+    <div id="state-error" style="display:none;">
+        <div style="width:56px;height:56px;background:rgba(229,57,53,0.1);border-radius:50%;
+                    display:flex;align-items:center;justify-content:center;margin:0 auto 24px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 stroke-width="2" stroke="#e53935" width="28" height="28">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#e53935;margin-bottom:8px;">Something went wrong</div>
+        <div id="error-msg" style="font-size:13px;color:var(--text-muted);margin-bottom:24px;
+                                    background:var(--surface-2);padding:12px;border-radius:6px;text-align:left;"></div>
+        <a href="{{ url_for('content_briefs.generate') }}" class="btn btn-secondary">← Try Again</a>
+    </div>
+
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+{% block scripts %}
+<script>
+(function () {
+    fetch('{{ url_for("content_briefs.api_process") }}', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('state-loading').style.display = 'none';
+            if (data.error) {
+                document.getElementById('error-msg').textContent = data.error;
+                document.getElementById('state-error').style.display = 'block';
+                return;
+            }
+            let msg = `${data.sku_count} SKU${data.sku_count !== 1 ? 's' : ''} processed.`;
+            if (data.not_found && data.not_found.length) {
+                msg += ` ${data.not_found.length} not found in Akeneo (highlighted in brief).`;
+            }
+            document.getElementById('done-msg').textContent = msg;
+            document.getElementById('done-actions').innerHTML =
+                `<a href="/content-briefs/view/${data.brief_id}" class="btn btn-primary">View Brief</a>
+                 <a href="/content-briefs/download/${data.brief_id}" class="btn btn-secondary">↓ Download</a>
+                 <a href="/content-briefs/" class="btn btn-secondary">Dashboard</a>`;
+            document.getElementById('state-done').style.display = 'block';
+        })
+        .catch(err => {
+            document.getElementById('state-loading').style.display = 'none';
+            document.getElementById('error-msg').textContent = err.toString();
+            document.getElementById('state-error').style.display = 'block';
+        });
+})();
+</script>
+{% endblock %}
+
+{% endblock %}

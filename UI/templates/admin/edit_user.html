@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ target.display_name }} — Roxor Content HUB{% endblock %}
+{% block page_title %}Edit User{% endblock %}
+{% block page_subtitle %}{{ target.display_name }} ({{ target.username }}){% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 540px;">
+  <form method="POST">
+
+    <div class="form-group">
+      <label class="form-label" for="display_name">Display Name</label>
+      <input class="form-control" type="text" id="display_name" name="display_name"
+             value="{{ target.display_name }}" required>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="email">Email</label>
+      <input class="form-control" type="email" id="email" name="email"
+             value="{{ target.email or '' }}">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="role">Role</label>
+      <select class="form-control" id="role" name="role">
+        <option value="user"  {{ 'selected' if target.role == 'user'  }}>User</option>
+        {% if user.role == 'chairman_mao' %}
+        <option value="admin" {{ 'selected' if target.role == 'admin' }}>Admin</option>
+        <option value="chairman_mao" {{ 'selected' if target.role == 'chairman_mao' }}>Chairman Mao</option>
+        {% endif %}
+      </select>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <div class="form-label" style="margin-bottom:12px;">Tool Access</div>
+      <div style="display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--navy-dark); border:1px solid var(--border); border-radius:8px;">
+        {% for t in tools %}
+        <div class="form-check">
+          <input type="checkbox" id="access_{{ t }}" name="access_{{ t }}" value="1"
+                 {{ 'checked' if target['access_' + t] }}>
+          <label for="access_{{ t }}">{{ tool_meta[t].label }}</label>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-bottom:24px; padding:16px; background:var(--navy-dark); border:1px solid var(--border); border-radius:8px;">
+      <div class="form-label" style="margin-bottom:12px;">Reset Password <span style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-muted);">(leave blank to keep current)</span></div>
+      <input class="form-control" type="password" name="new_password"
+             placeholder="New password (min 8 characters)" autocomplete="new-password">
+    </div>
+
+    <div style="margin-bottom:24px;padding:16px;background:var(--navy-dark);border:1px solid var(--border);border-radius:8px;">
+      <div class="form-label" style="margin-bottom:10px;">Notification Settings</div>
+      <div class="form-check">
+        <input type="checkbox" id="notify_admin" name="notify_admin" value="1"
+               {{ 'checked' if target.notify_admin }}>
+        <label for="notify_admin">Receives admin notifications</label>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;margin-left:24px;">
+        Gets notified when briefs are completed and when users request new batches.
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{{ url_for('dashboard.users') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

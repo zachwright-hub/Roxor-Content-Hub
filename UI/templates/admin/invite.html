@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Invite User — Roxor Content HUB{% endblock %}
+{% block page_title %}Invite User{% endblock %}
+{% block page_subtitle %}Send an email invite — they set their own username and password{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 540px;">
+  <form method="POST">
+
+    <div class="form-group">
+      <label class="form-label" for="email">Email Address</label>
+      <input class="form-control" type="email" id="email" name="email"
+             placeholder="name@roxorgroup.com" required autofocus>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="role">Role</label>
+      <select class="form-control" id="role" name="role">
+        <option value="user">User — access only what you grant below</option>
+        {% if user.role == 'chairman_mao' %}
+        <option value="admin">Admin — full access to everything, can manage users</option>
+        <option value="chairman_mao">Chairman Mao — superadmin, sees everything</option>
+        {% endif %}
+      </select>
+    </div>
+
+    <div style="margin-bottom:24px;">
+      <div class="form-label" style="margin-bottom:12px;">Tool Access</div>
+      <div style="display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--navy-dark); border:1px solid var(--border); border-radius:8px;">
+        {% for t in tools %}
+        <div class="form-check">
+          <input type="checkbox" id="access_{{ t }}" name="access_{{ t }}" value="1">
+          <label for="access_{{ t }}">{{ tool_meta[t].label }}</label>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+        Admin role overrides these — admins always have full access.
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button type="submit" class="btn btn-primary">Send Invite</button>
+      <a href="{{ url_for('dashboard.users') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

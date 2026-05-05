@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% block title %}Model Mappings{% endblock %}
+{% block page_title %}Model Mappings{% endblock %}
+{% block page_subtitle %}{{ total_all | default(0) }} SKUs mapped to 3D model names{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary" onclick="document.getElementById('addModal').style.display='flex'">+ Add Mapping</button>
+<button class="btn btn-secondary" onclick="document.getElementById('importModal').style.display='flex'">Import CSV</button>
+<form method="post" action="{{ url_for('briefs.api_sync_mappings_s3') }}" style="display:inline;" onsubmit="return confirm('Sync all mappings to S3?');">
+    <button type="submit" class="btn btn-secondary">Sync to S3</button>
+</form>
+<a href="{{ url_for('briefs.index') }}" class="btn btn-secondary">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+    <form method="get" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin:0; flex:1; min-width:200px;">
+            <label class="form-label">Search</label>
+            <input type="text" name="search" class="form-control" value="{{ search }}" placeholder="SKU or model name…">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-control">
+                <option value="">All</option>
+                <option value="mapped" {% if status_filter == 'mapped' %}selected{% endif %}>Mapped</option>
+                <option value="partial" {% if status_filter == 'partial' %}selected{% endif %}>Multi-model</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        {% if search or status_filter %}<a href="{{ url_for('briefs.model_mappings_view') }}" class="btn btn-secondary">Clear</a>{% endif %}
+    </form>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+    <div style="display:flex; gap:24px; font-size:13px;">
+        <span>Showing <strong>{{ total }}</strong> mappings</span>
+        <span style="color:var(--text-muted);">Total mapped: <strong>{{ total_all }}</strong></span>
+        <span style="margin-left:auto; color:var(--text-muted);">Page {{ page }} / {{ total_pages }}</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>SKU</th>
+                <th>3D Models</th>
+                <th>Count</th>
+                <th>Source</th>
+                <th style="width:120px;">Actions</th>
+            </tr></thead>
+            <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><strong>{{ row.sku }}</strong></td>
+                <td style="font-size:12px; color:var(--text-muted);">{{ row.models }}</td>
+                <td>{{ row.model_count }}</td>
+                <td style="font-size:11px; color:var(--text-muted);">manual</td>
+                <td>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary btn-sm" onclick="editMapping({{ row.mapping_id }}, '{{ row.sku|replace("'","\\'") }}', '{{ row.models|replace("'","\\'") }}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteMapping({{ row.mapping_id }}, '{{ row.sku|replace("'","\\'") }}')">Del</button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="color:var(--text-muted); padding:32px; text-align:center;">No mappings found</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+        {% if page > 1 %}<a href="?page={{ page-1 }}&search={{ search }}&status={{ status_filter }}" class="btn btn-secondary btn-sm">← Prev</a>{% endif %}
+        {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
+        <a href="?page={{ p }}&search={{ search }}&status={{ status_filter }}" class="btn btn-sm {% if p == page %}btn-primary{% else %}btn-secondary{% endif %}">{{ p }}</a>
+        {% endfor %}
+        {% if page < total_pages %}<a href="?page={{ page+1 }}&search={{ search }}&status={{ status_filter }}" class="btn btn-secondary btn-sm">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Modal -->
+<div id="addModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:480px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Add Model Mapping</span></div>
+        <div class="form-group">
+            <label class="form-label">SKU *</label>
+            <input type="text" id="addSku" class="form-control" placeholder="e.g. NUB101">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Model Names * <span style="font-weight:400; color:var(--text-muted);">(comma or semicolon separated)</span></label>
+            <input type="text" id="addModels" class="form-control" placeholder="e.g. NUB101_Bath, NUB101_Panel">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('addModal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" onclick="submitAdd()">Add Mapping</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <input type="hidden" id="editId">
+    <div class="card" style="width:480px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Edit Model Mapping</span></div>
+        <div class="form-group">
+            <label class="form-label">SKU *</label>
+            <input type="text" id="editSku" class="form-control">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Model Names *</label>
+            <input type="text" id="editModels" class="form-control">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('editModal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" onclick="submitEdit()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="importModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:540px; max-width:95vw;">
+        <div class="card-header"><span class="card-title">Import Mappings CSV</span></div>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">CSV must have <code>sku</code> and <code>models</code> columns. Existing SKUs will be updated.</p>
+        <div class="form-group">
+            <label class="form-label">Upload CSV File</label>
+            <input type="file" id="importFile" class="form-control" accept=".csv,.txt">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Or paste CSV data</label>
+            <textarea id="importText" class="form-control" rows="6" placeholder="sku,models&#10;SKU001,Model_A&#10;SKU002,Model_B, Model_C"></textarea>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('importModal').style.display='none'">Cancel</button>
+            <button class="btn btn-primary" onclick="submitImport()">Import</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function submitAdd() {
+    const sku = document.getElementById('addSku').value.trim();
+    const models = document.getElementById('addModels').value.trim();
+    if (!sku || !models) { alert('SKU and models are required'); return; }
+    fetch('/briefs/api/model-mappings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku, models})
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error || 'Failed');
+    });
+}
+
+function editMapping(id, sku, models) {
+    document.getElementById('editId').value = id;
+    document.getElementById('editSku').value = sku;
+    document.getElementById('editModels').value = models;
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function submitEdit() {
+    const id = document.getElementById('editId').value;
+    const sku = document.getElementById('editSku').value.trim();
+    const models = document.getElementById('editModels').value.trim();
+    if (!sku || !models) { alert('SKU and models are required'); return; }
+    fetch(`/briefs/api/model-mappings/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({sku, models})
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error || 'Failed');
+    });
+}
+
+function deleteMapping(id, sku) {
+    if (!confirm(`Delete mapping for ${sku}?`)) return;
+    fetch(`/briefs/api/model-mappings/${id}`, { method: 'DELETE' })
+        .then(r => r.json()).then(d => {
+            if (d.success) location.reload();
+            else alert(d.error || 'Failed');
+        });
+}
+
+function submitImport() {
+    const text = document.getElementById('importText').value.trim();
+    const file = document.getElementById('importFile').files[0];
+    const fd = new FormData();
+    if (file) fd.append('csv_file', file);
+    else if (text) fd.append('csv_data', text);
+    else { alert('Provide CSV file or paste CSV data'); return; }
+    fetch('/briefs/api/model-mappings/import', { method: 'POST', body: fd })
+        .then(r => r.json()).then(d => {
+            if (d.success) { alert(d.message); location.reload(); }
+            else alert(d.error || 'Failed');
+        });
+}
+</script>
+{% endblock %}

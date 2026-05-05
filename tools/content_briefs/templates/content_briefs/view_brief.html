@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ brief.name }} — Content Briefs{% endblock %}
+{% block page_title %}{{ brief.name }}{% endblock %}
+{% block page_subtitle %}Content brief — {{ brief.sku_count }} SKUs{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('content_briefs.download', brief_id=brief.id) }}" class="btn btn-primary btn-sm">↓ Download Brief</a>
+<a href="{{ url_for('content_briefs.index') }}" class="btn btn-secondary btn-sm">← All Briefs</a>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;">
+
+    <!-- Left: Config summary -->
+    <div>
+
+        <!-- Scoped Attributes -->
+        {% if scoped_attrs %}
+        <div class="card" style="margin-bottom:16px;padding:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:10px;height:10px;border-radius:2px;background:#1A3A8F;"></div>
+                <span style="font-weight:700;font-size:14px;color:var(--text);">Scoped Attributes</span>
+                <span style="font-size:11px;color:var(--text-muted);">per sales channel</span>
+            </div>
+            {% for scope, attrs in scoped_attrs.items() %}
+            <div style="margin-bottom:10px;">
+                <div style="font-size:12px;font-weight:600;color:#7eb3ff;margin-bottom:4px;font-family:monospace;">{{ scope }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    {% for attr in attrs %}
+                    <span style="font-size:12px;font-family:monospace;background:var(--surface-2);
+                                 color:var(--text);padding:2px 8px;border-radius:4px;border:1px solid var(--border);">
+                        {{ attr }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Localised Attributes -->
+        {% if locale_attrs %}
+        <div class="card" style="margin-bottom:16px;padding:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:10px;height:10px;border-radius:2px;background:#1A6B3A;"></div>
+                <span style="font-weight:700;font-size:14px;color:var(--text);">Localised Attributes</span>
+                <span style="font-size:11px;color:var(--text-muted);">per language</span>
+            </div>
+            {% for locale, attrs in locale_attrs.items() %}
+            <div style="margin-bottom:10px;">
+                <div style="font-size:12px;font-weight:600;color:#7ec99c;margin-bottom:4px;font-family:monospace;">{{ locale }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    {% for attr in attrs %}
+                    <span style="font-size:12px;font-family:monospace;background:var(--surface-2);
+                                 color:var(--text);padding:2px 8px;border-radius:4px;border:1px solid var(--border);">
+                        {{ attr }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Extra Attributes -->
+        {% if extra_attrs %}
+        <div class="card" style="margin-bottom:16px;padding:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:10px;height:10px;border-radius:2px;background:#7A4400;"></div>
+                <span style="font-weight:700;font-size:14px;color:var(--text);">Extra Attributes</span>
+                <span style="font-size:11px;color:var(--text-muted);">global</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                {% for attr in extra_attrs %}
+                <span style="font-size:12px;font-family:monospace;background:var(--surface-2);
+                             color:var(--text);padding:2px 8px;border-radius:4px;border:1px solid var(--border);">
+                    {{ attr }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Reference Attributes -->
+        {% if reference_attrs %}
+        <div class="card" style="margin-bottom:16px;padding:20px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <div style="width:10px;height:10px;border-radius:2px;background:#1A5276;"></div>
+                <span style="font-weight:700;font-size:14px;color:var(--text);">Reference Data</span>
+                <span style="font-size:11px;color:var(--text-muted);">context only — teal columns in spreadsheet</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                {% for attr in reference_attrs %}
+                <span style="font-size:12px;font-family:monospace;background:var(--surface-2);
+                             color:var(--text);padding:2px 8px;border-radius:4px;
+                             border:1px solid rgba(93,173,226,0.3);">
+                    {{ attr }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- SKU List -->
+        <div class="card" style="padding:20px;">
+            <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:12px;">
+                SKUs ({{ sku_list|length }})
+            </div>
+            <div style="max-height:280px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:6px;">
+                {% for sku in sku_list %}
+                <span style="font-size:12px;font-family:monospace;background:var(--surface-2);
+                             color:var(--text-muted);padding:2px 8px;border-radius:4px;">{{ sku }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right: Meta panel -->
+    <div>
+        <div class="card" style="padding:20px;margin-bottom:16px;">
+            <div style="font-weight:700;font-size:14px;color:var(--gold);margin-bottom:14px;">Brief Info</div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Status</span>
+                    <span>
+                        {% if brief.status in ('pending', 'assigned', none) %}
+                        <span style="padding:2px 8px;border-radius:4px;background:rgba(242,196,0,0.15);color:#F2C400;font-size:11px;">
+                            {{ 'Assigned' if brief.status == 'assigned' else 'Pending' }}
+                        </span>
+                        {% elif brief.status == 'in_progress' %}
+                        <span style="padding:2px 8px;border-radius:4px;background:rgba(33,150,243,0.15);color:#42a5f5;font-size:11px;">In Progress</span>
+                        {% elif brief.status == 'complete' %}
+                        <span style="padding:2px 8px;border-radius:4px;background:rgba(76,175,80,0.15);color:#4caf50;font-size:11px;">Complete</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Priority</span>
+                    <span style="font-weight:600;color:
+                        {% if brief.priority == 'urgent' %}#e53935
+                        {% elif brief.priority == 'high' %}#f57c00
+                        {% else %}var(--text-muted){% endif %};">
+                        {{ brief.priority|title }}
+                    </span>
+                </div>
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">SKUs</span>
+                    <span style="font-weight:600;color:var(--text);">{{ brief.sku_count }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Deadline</span>
+                    <span style="color:var(--text);">{{ brief.deadline or '—' }}</span>
+                </div>
+                {% if brief.assigned_to %}
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Assigned To</span>
+                    <span style="color:var(--text);">
+                        {% set assigned_user = users | selectattr('id', 'equalto', brief.assigned_to) | first %}
+                        {{ assigned_user.display_name if assigned_user else '—' }}
+                    </span>
+                </div>
+                {% endif %}
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Created</span>
+                    <span style="color:var(--text-muted);">{{ brief.created_at[:10] if brief.created_at else '—' }}</span>
+                </div>
+                {% if brief.downloaded_at %}
+                <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--text-muted);">Downloaded</span>
+                    <span style="color:var(--text-muted);">{{ brief.downloaded_at[:10] }}</span>
+                </div>
+                {% endif %}
+                {% if brief.notes %}
+                <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:2px;">
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Notes</div>
+                    <div style="font-size:13px;color:var(--text);">{{ brief.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Admin actions -->
+        {% if current_user.role == 'admin' %}
+        <div class="card" style="padding:20px;margin-bottom:16px;">
+            <div style="font-weight:700;font-size:14px;color:var(--gold);margin-bottom:14px;">Admin Actions</div>
+
+            <form method="POST" action="{{ url_for('content_briefs.assign_brief', brief_id=brief.id) }}"
+                  style="margin-bottom:10px;">
+                <label class="form-label" style="font-size:12px;">Assign To</label>
+                <div style="display:flex;gap:8px;">
+                    <select name="assigned_to" class="form-control" style="font-size:12px;">
+                        <option value="">— Unassigned —</option>
+                        {% for u in users %}
+                        <option value="{{ u.id }}" {% if brief.assigned_to == u.id %}selected{% endif %}>
+                            {{ u.display_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary btn-sm">Set</button>
+                </div>
+            </form>
+
+            <form method="POST" action="{{ url_for('content_briefs.update_status', brief_id=brief.id) }}"
+                  style="margin-bottom:10px;">
+                <label class="form-label" style="font-size:12px;">Status</label>
+                <div style="display:flex;gap:8px;">
+                    <select name="status" class="form-control" style="font-size:12px;">
+                        {% for s in ['pending', 'assigned', 'in_progress', 'complete'] %}
+                        <option value="{{ s }}" {% if brief.status == s %}selected{% endif %}>
+                            {{ s|replace('_', ' ')|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary btn-sm">Set</button>
+                </div>
+            </form>
+
+            <form method="POST" action="{{ url_for('content_briefs.update_priority', brief_id=brief.id) }}"
+                  style="margin-bottom:10px;">
+                <label class="form-label" style="font-size:12px;">Priority</label>
+                <div style="display:flex;gap:8px;">
+                    <select name="priority" class="form-control" style="font-size:12px;">
+                        {% for p in ['low', 'normal', 'high', 'urgent'] %}
+                        <option value="{{ p }}" {% if brief.priority == p %}selected{% endif %}>
+                            {{ p|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary btn-sm">Set</button>
+                </div>
+            </form>
+
+            <label class="form-label" style="font-size:12px;">Deadline</label>
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+                <input type="date" id="deadline-input" class="form-control"
+                       value="{{ brief.deadline or '' }}" style="font-size:12px;">
+                <button onclick="saveDeadline()" class="btn btn-secondary btn-sm">Set</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('content_briefs.delete_brief', brief_id=brief.id) }}"
+                  onsubmit="return confirm('Delete this brief? This cannot be undone.');">
+                <button type="submit" class="btn btn-sm" style="width:100%;
+                        background:rgba(229,57,53,0.1);color:#e53935;border:1px solid rgba(229,57,53,0.3);">
+                    Delete Brief
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <a href="{{ url_for('content_briefs.download', brief_id=brief.id) }}"
+           class="btn btn-primary" style="width:100%;text-align:center;display:block;">
+            ↓ Download Brief (.zip)
+        </a>
+    </div>
+
+</div>
+
+{% block scripts %}
+<script>
+function saveDeadline() {
+    const val = document.getElementById('deadline-input').value;
+    fetch('{{ url_for("content_briefs.update_deadline", brief_id=brief.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deadline: val })
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+    });
+}
+</script>
+{% endblock %}
+
+{% endblock %}

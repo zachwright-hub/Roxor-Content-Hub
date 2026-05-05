@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Request Batch — Roxor Content HUB{% endblock %}
+{% block page_title %}Request a Batch{% endblock %}
+{% block page_subtitle %}Let the team know what you need{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:520px;">
+    <form method="POST">
+
+        <div class="form-group">
+            <label class="form-label" for="tool">Which tool is this for?</label>
+            <select class="form-control" id="tool" name="tool">
+                <option value="lifestyle">Lifestyle Briefs</option>
+                <option value="content">Content Briefs</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px;">
+            <label class="form-label" for="message">What do you need?</label>
+            <textarea class="form-control" id="message" name="message" rows="5"
+                      placeholder="e.g. 'Need a new batch for the Arno range — 12 models, priority high, deadline end of next week.'"
+                      style="resize:vertical;" required></textarea>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+            <button type="submit" class="btn btn-primary">Send Request</button>
+            <a href="{{ url_for('dashboard.index') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+
+    </form>
+</div>
+{% endblock %}

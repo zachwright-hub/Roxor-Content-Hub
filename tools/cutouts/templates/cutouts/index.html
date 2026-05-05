@@ -1,0 +1,564 @@
+{% extends "base.html" %}
+
+{% block title %}LD & Cutout Uploader — Roxor Content HUB{% endblock %}
+{% block page_title %}LD & Cutout Uploader{% endblock %}
+{% block page_subtitle %}Upload line drawings and cutouts for review, then push to Scaleflex{% endblock %}
+
+{% block head %}
+<style>
+    .tabs { display:flex; gap:0; margin-bottom:18px; border-bottom:1px solid var(--border); }
+    .tool-tab { padding:8px 16px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:13px; font-weight:500; cursor:pointer; transition:all 0.15s; margin-bottom:-1px; }
+    .tool-tab:hover { color:var(--text); }
+    .tool-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+    .tab-badge { background:var(--gold); color:var(--navy); font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; margin-left:5px; }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    .type-toggle { display:inline-flex; gap:1px; margin-bottom:14px; background:var(--navy-dark); border-radius:5px; padding:2px; }
+    .type-toggle-btn { padding:5px 14px; background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:500; cursor:pointer; border-radius:4px; transition:all 0.15s; }
+    .type-toggle-btn:hover { color:var(--text); }
+    .type-toggle-btn.active { background:rgba(242,196,0,0.15); color:var(--gold); }
+
+    .drop-zone { border:1px dashed var(--border); border-radius:8px; padding:32px 20px; text-align:center; cursor:pointer; transition:all 0.15s; background:var(--navy-dark); margin-bottom:14px; }
+    .drop-zone:hover, .drop-zone.dragover { border-color:var(--gold); background:rgba(242,196,0,0.04); }
+    .drop-zone svg { width:28px; height:28px; color:var(--gold); margin-bottom:8px; opacity:0.6; }
+    .drop-zone p { color:var(--text-muted); font-size:13px; }
+    .drop-zone .browse { color:var(--gold); font-weight:500; cursor:pointer; }
+    .drop-zone-hint { font-size:11px; color:var(--text-muted); margin-top:4px; opacity:0.7; }
+
+    .file-item { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; background:var(--navy-dark); border-radius:4px; margin-bottom:3px; border:1px solid var(--border); }
+    .file-item .file-info { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
+    .file-item .file-icon { width:24px; height:24px; background:rgba(242,196,0,0.08); border-radius:3px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .file-item .file-icon svg { width:13px; height:13px; color:var(--gold); opacity:0.7; }
+    .file-item .file-name { font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .file-item .file-skus { font-size:11px; color:var(--text-muted); }
+    .file-item .remove-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px; font-size:16px; line-height:1; }
+    .file-item .remove-btn:hover { color:var(--danger); }
+
+    .upload-actions { display:flex; align-items:center; gap:6px; margin-bottom:14px; }
+
+    .progress-bar { width:100%; height:2px; background:var(--surface-2); border-radius:1px; margin-bottom:14px; overflow:hidden; display:none; }
+    .progress-bar.active { display:block; }
+    .progress-bar .fill { height:100%; background:var(--gold); transition:width 0.3s; width:0%; }
+
+    .processing { display:none; text-align:center; padding:16px; color:var(--text-muted); font-size:13px; }
+    .processing.active { display:block; }
+    .spinner { width:20px; height:20px; border:2px solid var(--surface-2); border-top-color:var(--gold); border-radius:50%; animation:spin 0.7s linear infinite; margin:0 auto 8px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    .result-item { background:var(--navy-dark); border-radius:4px; border:1px solid var(--border); margin-bottom:6px; overflow:hidden; }
+    .result-header { padding:8px 10px; display:flex; align-items:center; gap:8px; }
+    .result-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .result-dot.success { background:var(--success); }
+    .result-dot.error   { background:var(--danger); }
+    .result-filename { font-weight:600; font-size:13px; }
+    .result-message  { font-size:12px; color:var(--text-muted); margin-left:auto; }
+    .result-skus { padding:0 10px 8px 24px; }
+    .sku-line { display:flex; align-items:center; gap:6px; padding:2px 0; font-size:12px; }
+    .sku-line .sku-name { font-family:monospace; color:var(--text); font-weight:500; }
+    .sku-line .sku-target { color:var(--text-muted); }
+    .sku-line .sku-ok { margin-left:auto; color:var(--success); }
+
+    .review-empty, .archive-empty { text-align:center; padding:48px 20px; color:var(--text-muted); font-size:13px; }
+    .review-empty svg, .archive-empty svg { width:28px; height:28px; margin-bottom:8px; opacity:0.3; }
+
+    .review-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .review-count { font-size:12px; color:var(--text-muted); }
+
+    .review-card { background:var(--navy-dark); border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden; }
+    .review-card-header { padding:10px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+    .review-sku { font-size:13px; font-weight:700; font-family:monospace; color:var(--text); }
+    .review-source { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .asset-badge { font-size:9px; font-weight:700; padding:2px 7px; border-radius:3px; text-transform:uppercase; letter-spacing:0.5px; }
+    .asset-badge.ld { background:rgba(242,196,0,0.1); color:var(--gold); }
+    .asset-badge.co { background:rgba(34,197,94,0.12); color:var(--success); }
+    .brand-badge { font-size:9px; font-weight:600; padding:2px 7px; border-radius:3px; background:rgba(242,196,0,0.07); color:var(--text-muted); }
+    .review-images { display:grid; grid-template-columns:1fr 1fr; }
+    .review-image-col { padding:14px; text-align:center; }
+    .review-image-col:first-child { border-right:1px solid var(--border); }
+    .review-image-label { font-size:10px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; }
+    .review-image-col img { max-width:100%; max-height:340px; border-radius:4px; background:var(--bg); border:1px solid var(--border); cursor:pointer; transition:opacity 0.15s; }
+    .review-image-col img:hover { opacity:0.8; }
+    .no-cutout { display:flex; align-items:center; justify-content:center; height:160px; color:var(--text-muted); font-size:12px; background:var(--bg); border-radius:4px; }
+    .review-card-footer { padding:10px 14px; display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--border); }
+
+    .archive-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+    .filter-group { display:inline-flex; gap:1px; background:var(--navy-dark); border-radius:5px; padding:2px; }
+    .filter-btn { padding:4px 12px; background:transparent; border:none; color:var(--text-muted); font-size:12px; font-weight:500; cursor:pointer; border-radius:4px; transition:all 0.15s; }
+    .filter-btn:hover { color:var(--text); }
+    .filter-btn.active { background:var(--surface-2); color:var(--gold); }
+
+    .archive-extra-filters { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .filter-label { font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.3px; }
+    .filter-select, .filter-date { background:var(--navy-dark); border:1px solid var(--border); color:var(--text); font-size:12px; padding:4px 8px; border-radius:4px; font-family:inherit; }
+    .filter-date::-webkit-calendar-picker-indicator { filter:invert(0.5); }
+    .archive-count { font-size:12px; color:var(--text-muted); }
+
+    .archive-status-badge { font-size:9px; font-weight:700; padding:2px 7px; border-radius:3px; text-transform:uppercase; display:inline-block; }
+    .archive-status-badge.approved { background:rgba(34,197,94,0.12); color:var(--success); }
+    .archive-status-badge.denied   { background:rgba(239,68,68,0.1);  color:var(--danger); }
+    .archive-sku  { font-family:monospace; font-weight:500; }
+    .archive-date { color:var(--text-muted); font-size:12px; white-space:nowrap; }
+    .dl-link { color:var(--gold); font-size:12px; font-weight:500; text-decoration:none; display:inline-flex; align-items:center; gap:3px; opacity:0.8; }
+    .dl-link:hover { opacity:1; }
+
+    .lightbox { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:2000; align-items:center; justify-content:center; cursor:pointer; }
+    .lightbox.active { display:flex; }
+    .lightbox img { max-width:92vw; max-height:92vh; border-radius:4px; }
+    .lb-close { position:absolute; top:14px; right:18px; color:#888; font-size:1.6rem; cursor:pointer; background:none; border:none; }
+    .lb-close:hover { color:#fff; }
+
+    .toast-container { position:fixed; top:14px; right:14px; z-index:9999; display:flex; flex-direction:column; gap:6px; }
+    .toast { padding:9px 16px; border-radius:6px; font-size:13px; font-weight:500; animation:slideIn 0.2s ease; min-width:200px; box-shadow:0 4px 12px rgba(0,0,0,0.4); }
+    .toast.success { background:#066300; color:#c8ffc6; }
+    .toast.error   { background:#5c1a14; color:#f0a8a0; }
+    @keyframes slideIn { from { transform:translateX(60px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tabs">
+    <button class="tool-tab {{ 'active' if tab == 'upload' }}" onclick="switchTab('upload')">Upload</button>
+    <button class="tool-tab {{ 'active' if tab == 'review' }}" onclick="switchTab('review')">
+        Review <span class="tab-badge" id="reviewBadge" style="display:none">0</span>
+    </button>
+    <button class="tool-tab {{ 'active' if tab == 'archive' }}" onclick="switchTab('archive')">Archive</button>
+</div>
+
+<!-- UPLOAD -->
+<div class="tab-content {{ 'active' if tab == 'upload' }}" id="tab-upload">
+    <div class="type-toggle" id="typeToggle">
+        <button class="type-toggle-btn active" data-type="ld" onclick="setAssetType('ld')">Line Drawings (PDF / JPG)</button>
+        <button class="type-toggle-btn" data-type="co" onclick="setAssetType('co')">Cutouts (JPG)</button>
+    </div>
+    <div class="drop-zone" id="dropZone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p>Drag & drop files here or <span class="browse">browse</span></p>
+        <p class="drop-zone-hint" id="dropHint">Accepts PDF files — filename = comma-separated SKUs</p>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg" style="display:none">
+    <div id="fileList"></div>
+    <div class="upload-actions" id="uploadActions" style="display:none">
+        <button class="btn btn-primary" id="processBtn" onclick="processFiles()">Convert & Send to Review</button>
+        <button class="btn btn-secondary" onclick="clearFiles()">Clear All</button>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+    <div class="processing" id="processing"><div class="spinner"></div><p id="processingText">Processing...</p></div>
+    <div id="uploadResults"></div>
+</div>
+
+<!-- REVIEW -->
+<div class="tab-content {{ 'active' if tab == 'review' }}" id="tab-review">
+    <div class="review-toolbar" id="reviewToolbar" style="display:none">
+        <span class="review-count" id="reviewCount"></span>
+        <button class="btn btn-primary btn-sm" onclick="approveAll()">Approve All</button>
+    </div>
+    <div id="reviewList"></div>
+    <div class="review-empty" id="reviewEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        <p>No items pending review</p>
+    </div>
+</div>
+
+<!-- ARCHIVE -->
+<div class="tab-content {{ 'active' if tab == 'archive' }}" id="tab-archive">
+    <div class="archive-toolbar" id="archiveToolbar" style="display:none">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all" onclick="setArchiveFilter('all')">All</button>
+                <button class="filter-btn" data-filter="ld"  onclick="setArchiveFilter('ld')">Line Drawings</button>
+                <button class="filter-btn" data-filter="co"  onclick="setArchiveFilter('co')">Cutouts</button>
+            </div>
+            <div class="archive-extra-filters">
+                <span class="filter-label">Brand</span>
+                <select class="filter-select" id="archiveBrandFilter" onchange="renderArchive()">
+                    <option value="all">All Brands</option>
+                </select>
+                <span class="filter-label">From</span>
+                <input type="date" class="filter-date" id="archiveDateFrom" onchange="renderArchive()">
+                <span class="filter-label">To</span>
+                <input type="date" class="filter-date" id="archiveDateTo" onchange="renderArchive()">
+                <button class="btn btn-secondary btn-sm" onclick="clearDateFilters()">Clear</button>
+            </div>
+            <span class="archive-count" id="archiveCount"></span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="downloadArchive()">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download ZIP
+        </button>
+    </div>
+    <div id="archiveTableWrap"></div>
+    <div class="archive-empty" id="archiveEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+        <p>No archived items yet</p>
+    </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <button class="lb-close">&times;</button>
+    <img id="lightboxImg" src="" alt="Preview">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const BASE = '/cutouts';
+    let selectedFiles = [], currentAssetType = 'ld', currentArchiveFilter = 'all', archiveData = [];
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tool-tab').forEach((t, i) => t.classList.toggle('active', ['upload','review','archive'][i] === tab));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        if (tab === 'review') loadReview();
+        if (tab === 'archive') loadArchive();
+    }
+
+    function setAssetType(type) {
+        currentAssetType = type;
+        document.querySelectorAll('.type-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+        const hint = document.getElementById('dropHint');
+        document.getElementById('fileInput').accept = type === 'ld' ? '.pdf,.jpg,.jpeg' : '.jpg,.jpeg';
+        hint.textContent = type === 'ld' ? 'Accepts PDF or JPG — filename = comma-separated SKUs' : 'Accepts JPG — filename = comma-separated SKUs';
+        if (selectedFiles.length) { selectedFiles = []; renderFileList(); }
+    }
+
+    function showToast(msg, type='success') {
+        const c = document.getElementById('toasts');
+        const t = document.createElement('div');
+        t.className = 'toast ' + type;
+        t.textContent = msg;
+        c.appendChild(t);
+        setTimeout(() => t.remove(), 3500);
+    }
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); addFiles(e.dataTransfer.files); });
+    fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+    function addFiles(fl) {
+        for (const f of fl) {
+            const n = f.name.toLowerCase();
+            if (currentAssetType === 'ld' ? (n.endsWith('.pdf') || n.endsWith('.jpg') || n.endsWith('.jpeg')) : (n.endsWith('.jpg') || n.endsWith('.jpeg')))
+                selectedFiles.push(f);
+        }
+        renderFileList();
+    }
+
+    function removeFile(i) { selectedFiles.splice(i, 1); renderFileList(); }
+    function clearFiles() { selectedFiles = []; renderFileList(); document.getElementById('uploadResults').innerHTML = ''; }
+
+    function renderFileList() {
+        const list = document.getElementById('fileList');
+        const actions = document.getElementById('uploadActions');
+        if (!selectedFiles.length) { list.innerHTML = ''; actions.style.display = 'none'; return; }
+        actions.style.display = 'flex';
+        list.innerHTML = selectedFiles.map((f, i) => {
+            const skus = f.name.replace(/\.(pdf|jpg|jpeg)$/i, '').split(',').map(s => s.trim()).filter(Boolean);
+            return `<div class="file-item">
+                <div class="file-info">
+                    <div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <div>
+                        <div class="file-name">${f.name}</div>
+                        <div class="file-skus">${skus.length} SKU${skus.length !== 1 ? 's' : ''}: ${skus.join(', ')}</div>
+                    </div>
+                </div>
+                <button class="remove-btn" onclick="removeFile(${i})">&times;</button>
+            </div>`;
+        }).join('');
+    }
+
+    async function processFiles() {
+        if (!selectedFiles.length) return;
+        const btn = document.getElementById('processBtn');
+        const processing = document.getElementById('processing');
+        const pb = document.getElementById('progressBar');
+        btn.disabled = true; processing.classList.add('active'); pb.classList.add('active');
+        document.getElementById('progressFill').style.width = '30%';
+        document.getElementById('processingText').textContent = currentAssetType === 'ld' ? 'Converting PDFs and fetching from Akeneo...' : 'Processing cutouts and fetching from Akeneo...';
+        const fd = new FormData();
+        selectedFiles.forEach(f => fd.append('files', f));
+        fd.append('asset_type', currentAssetType);
+        try {
+            document.getElementById('progressFill').style.width = '60%';
+            const resp = await fetch(BASE + '/api/process', { method: 'POST', body: fd });
+            document.getElementById('progressFill').style.width = '90%';
+            const data = await resp.json();
+            if (data.error) { showToast(data.error, 'error'); return; }
+            document.getElementById('progressFill').style.width = '100%';
+            showUploadResults(data.results);
+            updateBadge(); selectedFiles = []; renderFileList();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+        finally {
+            btn.disabled = false; processing.classList.remove('active');
+            setTimeout(() => { pb.classList.remove('active'); document.getElementById('progressFill').style.width = '0%'; }, 500);
+        }
+    }
+
+    function showUploadResults(results) {
+        document.getElementById('uploadResults').innerHTML = results.map(r => {
+            const lines = (r.sku_results || []).map(sr => `<div class="sku-line"><span class="sku-name">${sr.sku}</span><span class="sku-target">→ ${sr.filename}</span><span class="sku-ok">${sr.has_cutout ? '✓ cutout found' : 'no cutout'}</span></div>`).join('');
+            return `<div class="result-item">
+                <div class="result-header"><div class="result-dot ${r.status}"></div><span class="result-filename">${r.filename}</span><span class="result-message">${r.message}</span></div>
+                ${lines ? `<div class="result-skus">${lines}</div>` : ''}
+            </div>`;
+        }).join('');
+    }
+
+    async function updateBadge() {
+        try {
+            const data = await fetch(BASE + '/api/pending').then(r => r.json());
+            const badge = document.getElementById('reviewBadge');
+            badge.textContent = data.items.length;
+            badge.style.display = data.items.length > 0 ? 'inline' : 'none';
+        } catch(e) {}
+    }
+
+    async function loadReview() {
+        const data = await fetch(BASE + '/api/pending').then(r => r.json());
+        const list = document.getElementById('reviewList');
+        const empty = document.getElementById('reviewEmpty');
+        const toolbar = document.getElementById('reviewToolbar');
+        if (!data.items.length) { list.innerHTML = ''; empty.style.display = 'block'; toolbar.style.display = 'none'; return; }
+        empty.style.display = 'none'; toolbar.style.display = 'flex';
+        document.getElementById('reviewCount').textContent = `${data.items.length} item${data.items.length !== 1 ? 's' : ''} pending review`;
+        list.innerHTML = data.items.map(item => {
+            const typeLabel = item.asset_type === 'co' ? 'Cutout' : 'Line Drawing';
+            const newLabel  = item.asset_type === 'co' ? 'New Cutout' : 'New Line Drawing';
+            const cmpLabel  = item.asset_type === 'co' ? 'Current Cutout (Akeneo)' : 'Current Cutout';
+            return `<div class="review-card" id="card-${item.id}">
+                <div class="review-card-header">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="review-sku">${item.sku}</span>
+                            <span class="asset-badge ${item.asset_type || 'ld'}">${typeLabel}</span>
+                            ${item.brand ? `<span class="brand-badge">${item.brand}</span>` : ''}
+                        </div>
+                        <div class="review-source">from ${item.source_filename}</div>
+                    </div>
+                    <div>
+                        ${item.pdf_id ? `<a href="${BASE}/api/pdf/${item.pdf_id}" target="_blank" class="btn btn-secondary btn-sm">View PDF</a>` : ''}
+                    </div>
+                </div>
+                <div class="review-images">
+                    <div class="review-image-col">
+                        <div class="review-image-label">${newLabel}</div>
+                        <img src="${BASE}/api/preview/${item.id}" alt="${item.sku}" onclick="openLightbox(event, this.src)">
+                    </div>
+                    <div class="review-image-col">
+                        <div class="review-image-label">${cmpLabel}</div>
+                        ${item.cutout_url ? `<img src="${item.cutout_url}" alt="${item.sku} current" onclick="openLightbox(event, this.src)">` : `<div class="no-cutout">No cutout found in Akeneo</div>`}
+                    </div>
+                </div>
+                <div class="review-card-footer">
+                    <button class="btn btn-danger btn-sm" onclick="denyItem('${item.id}','${item.sku}')">Deny</button>
+                    <button class="btn btn-primary btn-sm" onclick="approveItem('${item.id}','${item.sku}')">Approve</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function approveItem(id, sku) {
+        const card = document.getElementById('card-' + id);
+        card.querySelectorAll('.btn').forEach(b => b.disabled = true);
+        try {
+            const data = await fetch(`${BASE}/api/approve/${id}`, { method: 'POST' }).then(r => r.json());
+            if (data.success) {
+                card.style.transition = 'opacity 0.3s'; card.style.opacity = '0';
+                setTimeout(() => { card.remove(); checkReviewEmpty(); }, 300);
+                showToast(`${data.filename} uploaded to Scaleflex`); updateBadge();
+            } else { showToast(data.error || 'Upload failed', 'error'); card.querySelectorAll('.btn').forEach(b => b.disabled = false); }
+        } catch(e) { showToast('Error: ' + e.message, 'error'); card.querySelectorAll('.btn').forEach(b => b.disabled = false); }
+    }
+
+    async function denyItem(id, sku) {
+        const card = document.getElementById('card-' + id);
+        card.querySelectorAll('.btn').forEach(b => b.disabled = true);
+        try {
+            const data = await fetch(`${BASE}/api/deny/${id}`, { method: 'POST' }).then(r => r.json());
+            if (data.success) {
+                card.style.transition = 'opacity 0.3s'; card.style.opacity = '0';
+                setTimeout(() => { card.remove(); checkReviewEmpty(); }, 300);
+                showToast(`${sku} denied`); updateBadge();
+            }
+        } catch(e) { showToast('Error: ' + e.message, 'error'); card.querySelectorAll('.btn').forEach(b => b.disabled = false); }
+    }
+
+    async function approveAll() {
+        if (!confirm('Approve all pending items and upload to Scaleflex?')) return;
+        const btn = document.querySelector('#reviewToolbar .btn');
+        btn.disabled = true; btn.textContent = 'Uploading...';
+        try {
+            const data = await fetch(BASE + '/api/approve-all', { method: 'POST' }).then(r => r.json());
+            const ok = data.results.filter(r => r.success).length;
+            const fail = data.results.filter(r => !r.success).length;
+            showToast(fail === 0 ? `All ${ok} items uploaded` : `${ok} uploaded, ${fail} failed`, fail > 0 ? 'error' : 'success');
+            loadReview(); updateBadge();
+        } catch(e) { showToast('Error: ' + e.message, 'error'); }
+        finally { btn.disabled = false; btn.textContent = 'Approve All'; }
+    }
+
+    function checkReviewEmpty() {
+        const cards = document.querySelectorAll('.review-card');
+        if (!cards.length) { document.getElementById('reviewEmpty').style.display = 'block'; document.getElementById('reviewToolbar').style.display = 'none'; }
+        else document.getElementById('reviewCount').textContent = `${cards.length} item${cards.length !== 1 ? 's' : ''} pending review`;
+    }
+
+    function setArchiveFilter(f) {
+        currentArchiveFilter = f;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+        renderArchive();
+    }
+
+    function clearDateFilters() {
+        document.getElementById('archiveDateFrom').value = '';
+        document.getElementById('archiveDateTo').value = '';
+        document.getElementById('archiveBrandFilter').value = 'all';
+        renderArchive();
+    }
+
+    async function loadArchive() {
+        archiveData = (await fetch(BASE + '/api/archived').then(r => r.json())).items || [];
+        const sel = document.getElementById('archiveBrandFilter');
+        const prev = sel.value;
+        const brands = [...new Set(archiveData.map(i => i.brand || 'Unknown'))].sort();
+        sel.innerHTML = '<option value="all">All Brands</option>' + brands.map(b => `<option value="${b}">${b}</option>`).join('');
+        if (brands.includes(prev)) sel.value = prev;
+        renderArchive();
+    }
+
+    function renderArchive() {
+        const wrap = document.getElementById('archiveTableWrap');
+        const empty = document.getElementById('archiveEmpty');
+        const toolbar = document.getElementById('archiveToolbar');
+        let filtered = archiveData;
+        if (currentArchiveFilter !== 'all') filtered = filtered.filter(i => i.asset_type === currentArchiveFilter);
+        const brand = document.getElementById('archiveBrandFilter').value;
+        if (brand !== 'all') filtered = filtered.filter(i => (i.brand || 'Unknown') === brand);
+        const df = document.getElementById('archiveDateFrom').value;
+        const dt = document.getElementById('archiveDateTo').value;
+        if (df) filtered = filtered.filter(i => i.created_at && i.created_at.slice(0,10) >= df);
+        if (dt) filtered = filtered.filter(i => i.created_at && i.created_at.slice(0,10) <= dt);
+        toolbar.style.display = archiveData.length ? 'flex' : 'none';
+        if (!filtered.length) { wrap.innerHTML = ''; empty.style.display = 'block'; document.getElementById('archiveCount').textContent = ''; return; }
+        empty.style.display = 'none';
+        const approved = filtered.filter(i => i.status === 'approved').length;
+        const denied   = filtered.filter(i => i.status === 'denied').length;
+        document.getElementById('archiveCount').textContent = `${filtered.length} items (${approved} approved, ${denied} denied)`;
+        const fmt = s => { if (!s) return ''; const d = new Date(s); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+        wrap.innerHTML = `<div class="table-wrap"><table>
+            <thead><tr><th>Status</th><th>Type</th><th>SKU</th><th>Brand</th><th>Filename</th><th>Date</th><th>Download</th></tr></thead>
+            <tbody>${filtered.map(item => `<tr>
+                <td><span class="archive-status-badge ${item.status}">${item.status}</span></td>
+                <td><span class="asset-badge ${item.asset_type || 'ld'}">${(item.asset_type||'ld') === 'co' ? 'CO' : 'LD'}</span></td>
+                <td class="archive-sku">${item.sku}</td>
+                <td>${item.brand || '—'}</td>
+                <td style="font-size:12px">${item.jpg_filename}</td>
+                <td class="archive-date">${fmt(item.created_at)}</td>
+                <td>${item.status === 'approved' && item.scaleflex_url ? `<a href="${item.scaleflex_url}" target="_blank" class="dl-link">↓ Download</a>` : '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+
+    async function downloadArchive() {
+        const p = new URLSearchParams();
+        if (currentArchiveFilter !== 'all') p.set('type', currentArchiveFilter);
+        const b = document.getElementById('archiveBrandFilter').value;
+        if (b !== 'all') p.set('brand', b);
+        const df = document.getElementById('archiveDateFrom').value;
+        const dt = document.getElementById('archiveDateTo').value;
+        if (df) p.set('from', df);
+        if (dt) p.set('to', dt);
+
+        const overlay = document.getElementById('dlOverlay');
+        const sub = document.getElementById('dlOverlaySub');
+        const bar = document.getElementById('dlProgressBar');
+        overlay.classList.add('active');
+        sub.textContent = 'Building file list…';
+        bar.style.width = '0%';
+
+        try {
+            const listResp = await fetch(BASE + '/api/download-archive' + (p.toString() ? '?' + p.toString() : ''));
+            if (!listResp.ok) {
+                const err = await listResp.json().catch(() => ({}));
+                overlay.classList.remove('active');
+                alert('Failed: ' + (err.error || listResp.statusText));
+                return;
+            }
+            const { files } = await listResp.json();
+            if (!files || files.length === 0) {
+                overlay.classList.remove('active');
+                alert('No files to download.');
+                return;
+            }
+
+            const zip = new JSZip();
+            let done = 0;
+            const total = files.length;
+
+            await Promise.all(files.map(async ({ url, zip_path }) => {
+                try {
+                    const r = await fetch(url);
+                    if (r.ok) zip.file(zip_path, await r.blob());
+                } catch (e) { /* skip */ }
+                done++;
+                bar.style.width = Math.round((done / total) * 100) + '%';
+                sub.textContent = `${done} / ${total} images`;
+            }));
+
+            sub.textContent = 'Compressing…';
+            bar.style.width = '100%';
+            const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `archive_${new Date().toISOString().slice(0,10)}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            overlay.classList.remove('active');
+        } catch (e) {
+            overlay.classList.remove('active');
+            alert('Download error: ' + e.message);
+        }
+    }
+
+    function openLightbox(e, src) { e.stopPropagation(); document.getElementById('lightboxImg').src = src; document.getElementById('lightbox').classList.add('active'); }
+    function closeLightbox() { document.getElementById('lightbox').classList.remove('active'); }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+    updateBadge();
+    if (document.getElementById('tab-review').classList.contains('active')) loadReview();
+    if (document.getElementById('tab-archive').classList.contains('active')) loadArchive();
+</script>
+
+<div class="dl-overlay" id="dlOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:32px 40px;min-width:320px;text-align:center;">
+        <div style="font-size:15px;font-weight:600;margin-bottom:16px;color:var(--text);">Downloading archive&hellip;</div>
+        <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:12px;">
+            <div id="dlProgressBar" style="height:100%;background:var(--gold);width:0%;transition:width 0.2s;"></div>
+        </div>
+        <div id="dlOverlaySub" style="font-size:12px;color:var(--text-muted);">Starting…</div>
+    </div>
+</div>
+<script>
+    // show/hide overlay with flex
+    const _dlOverlay = document.getElementById('dlOverlay');
+    const _origAdd = _dlOverlay.classList.add.bind(_dlOverlay.classList);
+    const _origRemove = _dlOverlay.classList.remove.bind(_dlOverlay.classList);
+    _dlOverlay.classList.add = function(cls) {
+        if (cls === 'active') { this.style.display = 'flex'; } else { _origAdd(cls); }
+    };
+    _dlOverlay.classList.remove = function(cls) {
+        if (cls === 'active') { this.style.display = 'none'; } else { _origRemove(cls); }
+    };
+</script>
+<script src="{{ url_for('static', filename='js/jszip.min.js') }}"></script>
+{% endblock %}

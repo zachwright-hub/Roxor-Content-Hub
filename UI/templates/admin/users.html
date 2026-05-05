@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Users — Roxor Content HUB{% endblock %}
+{% block page_title %}Manage Users{% endblock %}
+{% block page_subtitle %}Accounts, permissions, and pending invites{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('dashboard.invite_user') }}" class="btn btn-primary btn-sm">+ Invite User</a>
+{% endblock %}
+
+{% block content %}
+
+{# ── Active users ────────────────────────────────────────────────────────── #}
+<div class="card" style="margin-bottom: 24px;">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Role</th>
+          <th>Status</th>
+          {% for t in tools %}
+          <th style="text-align:center; font-size:10px;">{{ tool_meta[t].label.split()[0] }}</th>
+          {% endfor %}
+          <th>Last Login</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr style="{% if u.status == 'inactive' %}opacity: 0.5;{% endif %}">
+
+          {# Name + username #}
+          <td>
+            <div style="font-weight:600; color: var(--text);">{{ u.display_name }}</div>
+            <div style="font-size:11px; color: var(--text-muted);">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %}</div>
+          </td>
+
+          {# Role badge #}
+          <td>
+            {% if u.role == 'chairman_mao' %}
+              <span class="status-badge active" style="background:rgba(242,196,0,0.15);color:var(--gold);border:1px solid rgba(242,196,0,0.3);">★ Chairman Mao</span>
+            {% elif u.role == 'admin' %}
+              <span class="status-badge active">Admin</span>
+            {% else %}
+              <span class="status-badge" style="background:var(--surface-2);color:var(--text-muted);">User</span>
+            {% endif %}
+          </td>
+
+          {# Status badge #}
+          <td>
+            {% if u.status == 'active' %}
+              <span class="status-badge active">Active</span>
+            {% else %}
+              <span class="status-badge" style="background:rgba(239,68,68,0.12);color:var(--danger);">Disabled</span>
+            {% endif %}
+          </td>
+
+          {# Tool access toggles #}
+          {% for t in tools %}
+          <td style="text-align:center;">
+            {% if u.role in ('admin', 'chairman_mao') %}
+              <span style="color:var(--gold); font-size:15px;" title="Admin — full access">★</span>
+            {% else %}
+              <form method="POST" action="{{ url_for('dashboard.toggle_tool_access', user_id=u.id, tool=t) }}" style="display:inline;">
+                <button type="submit" class="btn btn-sm"
+                  style="padding:3px 8px;
+                    {% if u['access_' + t] %}
+                      background:rgba(34,197,94,0.12);color:var(--success);border:1px solid rgba(34,197,94,0.25);
+                    {% else %}
+                      background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);
+                    {% endif %}">
+                  {{ '✓' if u['access_' + t] else '✗' }}
+                </button>
+              </form>
+            {% endif %}
+          </td>
+          {% endfor %}
+
+          {# Last login #}
+          <td style="font-size:11px; color:var(--text-muted); white-space:nowrap;">
+            {{ u.last_login[:16] if u.last_login else 'Never' }}
+          </td>
+
+          {# Actions: edit · disable/enable · delete #}
+          {% set can_manage = (user.role == 'chairman_mao') or (u.role == 'user') %}
+          <td style="text-align:right; white-space:nowrap;">
+
+            {% if can_manage %}
+              <a href="{{ url_for('dashboard.edit_user', user_id=u.id) }}"
+                 class="btn btn-secondary btn-sm" style="margin-right:4px;">Edit</a>
+            {% else %}
+              <span class="btn btn-secondary btn-sm" style="margin-right:4px;opacity:0.35;cursor:not-allowed;" title="Only Chairman Mao can edit admin accounts">Edit</span>
+            {% endif %}
+
+            {% if u.id != user.id %}
+              {% if can_manage %}
+                <form method="POST" action="{{ url_for('dashboard.toggle_user_status', user_id=u.id) }}" style="display:inline;">
+                  <button type="submit" class="btn btn-sm"
+                    style="margin-right:4px;
+                      {% if u.status == 'active' %}
+                        background:rgba(245,158,11,0.12);color:var(--warning);border:1px solid rgba(245,158,11,0.25);
+                      {% else %}
+                        background:rgba(34,197,94,0.12);color:var(--success);border:1px solid rgba(34,197,94,0.25);
+                      {% endif %}">
+                    {{ 'Disable' if u.status == 'active' else 'Enable' }}
+                  </button>
+                </form>
+                <form method="POST" action="{{ url_for('dashboard.delete_user', user_id=u.id) }}"
+                      style="display:inline;"
+                      onsubmit="return confirm('Delete {{ u.display_name }}? This cannot be undone.');">
+                  <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+              {% else %}
+                <span style="font-size:11px;color:var(--text-muted);" title="Only Chairman Mao can manage admin accounts">protected</span>
+              {% endif %}
+            {% else %}
+              <span style="font-size:11px;color:var(--text-muted);">you</span>
+            {% endif %}
+
+          </td>
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Pending invites ──────────────────────────────────────────────────────── #}
+{% if pending_invites %}
+<div class="card">
+  <div class="card-header" style="margin-bottom:12px;">
+    <div class="card-title">Pending Invites</div>
+    <span style="font-size:12px;color:var(--text-muted);">{{ pending_invites|length }} awaiting account setup</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Tools Granted</th>
+          <th>Sent</th>
+          <th>Expires</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in pending_invites %}
+        <tr>
+          <td style="font-weight:500;">{{ inv.email }}</td>
+          <td>
+            <span class="status-badge {{ 'active' if inv.role == 'admin' else '' }}"
+                  style="{% if inv.role != 'admin' %}background:var(--surface-2);color:var(--text-muted);{% endif %}">
+              {{ inv.role.title() }}
+            </span>
+          </td>
+          <td style="font-size:12px;color:var(--text-muted);">
+            {% set granted = [] %}
+            {% for t in tools %}{% if inv['access_' + t] %}{% set _ = granted.append(tool_meta[t].label.split()[0]) %}{% endif %}{% endfor %}
+            {{ granted | join(', ') if granted else '—' }}
+          </td>
+          <td style="font-size:11px;color:var(--text-muted);">{{ inv.created_at[:16] }}</td>
+          <td style="font-size:11px;color:var(--text-muted);">{{ inv.expires_at[:10] }}</td>
+          <td style="text-align:right;">
+            <form method="POST" action="{{ url_for('dashboard.revoke_invite', invite_id=inv.id) }}"
+                  onsubmit="return confirm('Revoke this invite for {{ inv.email }}?');">
+              <button type="submit" class="btn btn-danger btn-sm">Revoke</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

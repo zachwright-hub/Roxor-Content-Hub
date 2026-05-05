@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}New User — Roxor Content HUB{% endblock %}
+{% block page_title %}New User{% endblock %}
+{% block page_subtitle %}Create an account and set tool access{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 520px;">
+    <form method="POST">
+        <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            <input class="form-control" type="text" id="username" name="username" required autofocus>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="display_name">Display Name</label>
+            <input class="form-control" type="text" id="display_name" name="display_name" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="email">Email (optional)</label>
+            <input class="form-control" type="email" id="email" name="email">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-control" type="password" id="password" name="password" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="role">Role</label>
+            <select class="form-control" id="role" name="role">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <div class="form-label" style="margin-bottom: 10px;">Tool Access</div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div class="form-check">
+                    <input type="checkbox" id="access_linedrawings" name="access_linedrawings" value="1">
+                    <label for="access_linedrawings">Line Drawing Generator</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="access_cutouts" name="access_cutouts" value="1">
+                    <label for="access_cutouts">Cutout Sorter</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="access_briefs" name="access_briefs" value="1">
+                    <label for="access_briefs">Lifestyle Brief Generator</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="access_content_tracker" name="access_content_tracker" value="1">
+                    <label for="access_content_tracker">Roxor Content Tracker</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" id="access_content_briefs" name="access_content_briefs" value="1">
+                    <label for="access_content_briefs">Content Brief Generator</label>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex; gap: 10px;">
+            <button type="submit" class="btn btn-primary">Create User</button>
+            <a href="{{ url_for('dashboard.users') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
