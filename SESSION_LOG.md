@@ -137,3 +137,26 @@
 - Deploy script: written, in CLAUDE.md ✓
 - **Remaining**: linedrawings tool (routes + templates still placeholder)
 - **Test**: run full scan once other editing sessions finish (Flask reload kills scan threads)
+
+---
+
+## Session 4 — 2026-05-05
+
+**Goal**: GitHub push, "push" auto-commit hook, hand off to offshore developer
+
+### What was done
+
+**GitHub push**
+- `.gitignore` created: excludes `.env`, `*.db`, `__pycache__`, `venv/`, logs
+- Entire chairman mao project pushed to `https://github.com/zachwright-hub/Roxor-Content-Hub`
+
+**Auto-push hook**
+- `.claude/push-hook.ps1` — PowerShell script: reads stdin JSON, intercepts user prompt of exactly "push", runs `git add -A` + `git commit -m "Save: <timestamp>"` + `git push`, returns `{"continue":false}` to suppress Claude response
+- `.claude/settings.json` — `UserPromptSubmit` hook wired to the script
+- Effect: typing "push" in this project auto-saves and pushes to GitHub without any Claude involvement
+
+### Status at end of session
+
+- All built tools (cutouts ✓, briefs ✓, content tracker ✓) pushed to GitHub
+- Offshore developer being looped in for review
+- **Remaining**: linedrawings tool (routes + templates still placeholder), server deploy (Zach to confirm Lightsail instance IP)
